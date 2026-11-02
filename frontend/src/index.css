@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* ==========================================================================
+     Design G: SmartScan Green System (docs/02_DESIGN.md & Design Board)
+     ========================================================================== */
+  --color-primary: #14532D;          /* Primary deep green: headers, buttons, logo */
+  --color-primary-dark: #0C3B21;     /* Dark green: dashboard sidebar */
+  --color-bg-cream: #F6F2E7;         /* Background cream */
+  --color-card-cream: #F6EBD7;       /* Card cream tint */
+  --color-surface-tint: #E8F1E4;     /* Light green tint surface */
+  --color-surface-tint-alt: #EFF4E4; /* Secondary light green tint */
+  --color-ink: #16130E;              /* Primary text */
+  --color-ink-muted: #43543F;        /* Muted olive-grey text */
+  --color-success: #16A34A;          /* Paid / Verified green */
+  --color-success-bright: #22C55E;   /* Bright accent green */
+  --color-pending: #B45309;          /* Pending warm amber text */
+  --color-pending-bg: #FEF3C7;       /* Pending amber background */
+  --color-alert: #DC2626;            /* Alert red: MISMATCH / errors ONLY */
+  --color-alert-bg: #FEE2E2;         /* Alert red background */
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-bg-cream);
+  color: var(--color-ink);
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+}
+
+/* Ensure large touch targets for mobile accessibility (min ~48px height) */
+button, a, input, select {
+  touch-action: manipulation;
+}
