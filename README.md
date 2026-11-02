@@ -93,11 +93,18 @@ All seeded demo accounts share one common password: **`SmartScanDemo2026!`**
 
 ## What Works / What to Test (Living Section)
 
-### Phase 0: Foundation & Setup (Current)
+### Phase 0: Foundation & Setup (Completed & Verified)
 - [x] **Project Structure**: Clean separation of `frontend/`, `backend/`, and `docs/`.
 - [x] **Design Tokens**: Defined in `frontend/tailwind.config.js` and `frontend/src/index.css` matching Design G (`#14532D`, `#0C3B21`, `#F6F2E7`, `#16130E`, `#16A34A`, `#B45309`, `#DC2626`).
 - [x] **Frontend Build**: Verified clean `npm run build` using Vite + React + Tailwind CSS.
 - [x] **Backend API**: Verified FastAPI app import, health check (`GET /`), and `/admin/reset-demo` endpoint.
-- [x] **Database Schema**: Full PostgreSQL schema in `backend/schema.sql` (39 statements validated via `sqlparse`).
-- [x] **Demo Seeder**: `backend/seed.py` configured with idempotent data restore and shared demo password.
-- [ ] **Supabase Execution**: *PENDING* — awaiting real Supabase project URL and service-role key in `.env`.
+- [x] **Database Schema**: Full PostgreSQL schema in `backend/schema.sql` (all 7 tables, functions, indexes, and RLS policies active).
+- [x] **Database Seed Execution**: Executed `backend/seed.py` against live Supabase project.
+  - Verified 3 stores (`FM`, `SH`, `DN`).
+  - Verified 16 products catalogued with EAN-13 barcodes.
+  - Verified multi-store pricing (Steel Water Bottle resolves to ₹499 in FreshMart and ₹549 in StyleHub).
+  - Verified 40 total orders seeded (canonical bill `SS-20481`, 2 recent demo orders, and 37 orders across past 7 days).
+  - Verified 4 profiles bound to appropriate roles and store IDs.
+- [x] **Live Auth Test**: Verified password sign-in against Supabase Auth API using demo customer credentials (`demo@smartscan.app`).
+- [x] **One-Click Reset Verified**: Called `POST /admin/reset-demo` and confirmed identical state restoration.
+
