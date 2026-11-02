@@ -108,3 +108,11 @@ All seeded demo accounts share one common password: **`SmartScanDemo2026!`**
 - [x] **Live Auth Test**: Verified password sign-in against Supabase Auth API using demo customer credentials (`demo@smartscan.app`).
 - [x] **One-Click Reset Verified**: Called `POST /admin/reset-demo` and confirmed identical state restoration.
 
+### Phase 1: Design Gate (Completed & Awaiting Approval)
+- [x] **Design Tokens**: Standardized strictly in `tailwind.config.js` and `src/index.css` with 0 arbitrary hex codes.
+- [x] **Screen 1 — Home / Store Select**: In-app store selection (FreshMart, StyleHub, DailyNeeds), personalized greeting, search, categories, and scan banner.
+- [x] **Screen 2 — Store Home (FreshMart)**: Real seeded 8-product catalog, interactive category filter, out-of-stock badge on Coca-Cola, and sticky bottom cart bar (`3 items | ₹317 ->`).
+- [x] **Screen 3 — Scanner UI**: Camera viewfinder shell with corner brackets, barcode illustration, torch toggle, manual entry fallback, and detected product card.
+- [x] **Centralized Mock Data**: Created `frontend/src/data/mockData.js` mirroring seed values for seamless Phase 2 backend swap.
+- [x] **Screenshots Captured**: Stored at `screenshots/phase1/` (`home.png`, `store.png`, `scanner.png`) for design gate review.
+
