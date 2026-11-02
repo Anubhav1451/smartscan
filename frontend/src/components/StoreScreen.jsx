@@ -55,7 +55,7 @@ export default function StoreScreen({ onNavigate }) {
       </header>
 
       {/* Main Scrollable Body */}
-      <div className="flex-1 overflow-y-auto px-4 pt-2 pb-20 space-y-3">
+      <div className="flex-1 overflow-y-auto px-4 pt-2 pb-32 space-y-3">
         
         {/* Location Breadcrumb */}
         <div className="flex items-center text-[11px] text-ink-muted font-medium">
@@ -109,7 +109,7 @@ export default function StoreScreen({ onNavigate }) {
             <div 
               key={prod.id}
               className={`bg-white rounded-card p-2.5 border border-surface-tint shadow-xs flex flex-col justify-between transition-all ${
-                prod.isOutOfStock ? 'opacity-65 bg-disabled-bg/30' : 'hover:border-primary/40'
+                prod.isOutOfStock ? 'opacity-45 select-none bg-disabled-bg/25 border-surface-tint/40' : 'hover:border-primary/40'
               }`}
             >
               {/* Product Badge / Thumbnail */}
@@ -117,11 +117,6 @@ export default function StoreScreen({ onNavigate }) {
                 <div className={`w-10 h-10 rounded-card-sm ${prod.badgeBg} ${prod.badgeText} font-bold text-xs flex items-center justify-center shadow-2xs`}>
                   {prod.badge}
                 </div>
-                {prod.isOutOfStock && (
-                  <span className="absolute top-1 right-1 bg-alert text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full">
-                    Stock 0
-                  </span>
-                )}
               </div>
 
               {/* Product Info */}
@@ -139,7 +134,7 @@ export default function StoreScreen({ onNavigate }) {
                     ₹{prod.price}
                   </span>
                   {prod.isOutOfStock && (
-                    <span className="text-[9px] text-alert font-medium">Out of Stock</span>
+                    <span className="text-[9px] text-ink-muted font-medium">Out of Stock</span>
                   )}
                 </div>
 
@@ -147,6 +142,7 @@ export default function StoreScreen({ onNavigate }) {
                   <button 
                     disabled
                     type="button"
+                    aria-label="Out of Stock"
                     className="w-6 h-6 rounded-full bg-disabled-bg text-disabled flex items-center justify-center cursor-not-allowed"
                   >
                     <Plus className="w-3.5 h-3.5" />

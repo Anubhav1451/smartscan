@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   ChevronLeft, 
-  Flashlight, 
+  Zap, 
   Barcode, 
   Check, 
   Plus, 
@@ -44,11 +44,14 @@ export default function ScannerScreen({ onNavigate }) {
           type="button"
           onClick={() => setTorchOn(!torchOn)}
           aria-label="Toggle Torch"
+          title="Toggle Torch"
           className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
-            torchOn ? 'bg-pending text-white shadow-xs' : 'bg-white border border-surface-tint text-ink-muted hover:text-ink'
+            torchOn 
+              ? 'bg-pending text-white shadow-xs' 
+              : 'bg-white border border-surface-tint text-ink-muted hover:text-primary'
           }`}
         >
-          <Flashlight className="w-4 h-4" />
+          <Zap className={`w-4 h-4 ${torchOn ? 'fill-current' : 'stroke-[2.2]'}`} />
         </button>
       </header>
 

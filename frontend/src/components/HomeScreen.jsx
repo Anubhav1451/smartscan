@@ -7,14 +7,59 @@ import {
   Home as HomeIcon, 
   FileText, 
   User, 
-  Check,
-  CheckCircle2
+  Shirt,
+  Apple,
+  Tv,
+  Sofa
 } from 'lucide-react';
 import { 
   MOCK_USER, 
   MOCK_STORES, 
   MOCK_HOME_CATEGORIES 
 } from '../data/mockData';
+
+// Brand mark: Shopping bag outline with a check mark inside (docs/02_DESIGN.md & design board)
+function SmartScanBrandMark({ className = "w-8 h-8" }) {
+  return (
+    <div className={`rounded-card-sm bg-primary flex items-center justify-center p-1.5 shadow-xs shrink-0 ${className}`}>
+      <svg 
+        viewBox="0 0 24 24" 
+        fill="none" 
+        className="w-full h-full"
+      >
+        {/* Shopping bag handle */}
+        <path 
+          d="M9 7V5C9 3.89543 9.89543 3 11 3H13C14.1046 3 15 3.89543 15 5V7" 
+          stroke="#F6F2E7" 
+          strokeWidth="2" 
+          strokeLinecap="round" 
+        />
+        {/* Shopping bag body */}
+        <path 
+          d="M5 7H19L18 20C18 20.5523 17.5523 21 17 21H7C6.44772 21 6 20.5523 6 20L5 7Z" 
+          stroke="#F6F2E7" 
+          strokeWidth="1.8" 
+          strokeLinejoin="round" 
+        />
+        {/* Check mark inside bag */}
+        <path 
+          d="M9.5 13.5L11.5 15.5L15 11" 
+          stroke="#F6F2E7" 
+          strokeWidth="2.2" 
+          strokeLinecap="round" 
+          strokeLinejoin="round" 
+        />
+      </svg>
+    </div>
+  );
+}
+
+const CATEGORY_ICONS = {
+  fash: Shirt,
+  groc: Apple,
+  elec: Tv,
+  home: Sofa,
+};
 
 export default function HomeScreen({ onNavigate }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -29,12 +74,10 @@ export default function HomeScreen({ onNavigate }) {
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto px-5 pt-3 pb-6 space-y-5">
         
-        {/* App Header */}
+        {/* App Header with locked brand mark */}
         <header className="flex items-center justify-between pt-1">
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white shadow-xs">
-              <Check className="w-4 h-4 stroke-[3]" />
-            </div>
+          <div className="flex items-center space-x-2.5">
+            <SmartScanBrandMark />
             <span className="font-bold text-lg tracking-tight text-ink">SmartScan</span>
           </div>
           <div className="w-2.5 h-2.5 rounded-full bg-success"></div>
@@ -118,18 +161,23 @@ export default function HomeScreen({ onNavigate }) {
         <div className="space-y-3">
           <h3 className="font-bold text-sm text-ink tracking-tight">Shop by Category</h3>
           
-          <div className="grid grid-cols-4 gap-2.5">
-            {MOCK_HOME_CATEGORIES.map((cat) => (
-              <div 
-                key={cat.id}
-                className="bg-white rounded-card p-2.5 border border-surface-tint shadow-xs flex flex-col items-center text-center cursor-pointer hover:border-primary/30 transition-all active:scale-[0.98]"
-              >
-                <div className="w-10 h-10 rounded-card-sm bg-surface-tint text-primary font-bold text-xs flex items-center justify-center mb-1.5">
-                  {cat.code}
+          <div className="grid grid-cols-4 gap-2">
+            {MOCK_HOME_CATEGORIES.map((cat) => {
+              const Icon = CATEGORY_ICONS[cat.id] || ShoppingBag;
+              return (
+                <div 
+                  key={cat.id}
+                  className="bg-white rounded-card p-2 border border-surface-tint shadow-xs flex flex-col items-center justify-center text-center cursor-pointer hover:border-primary/40 transition-all active:scale-[0.98]"
+                >
+                  <div className="w-9 h-9 rounded-card-sm bg-surface-tint text-primary flex items-center justify-center mb-1.5 shadow-2xs">
+                    <Icon className="w-4 h-4 stroke-[2.2]" />
+                  </div>
+                  <span className="text-[10px] font-semibold text-ink leading-tight text-center whitespace-nowrap">
+                    {cat.label}
+                  </span>
                 </div>
-                <span className="text-[11px] font-medium text-ink truncate w-full">{cat.label}</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 

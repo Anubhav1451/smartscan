@@ -44,10 +44,10 @@ export const MOCK_STORES = [
 ];
 
 export const MOCK_HOME_CATEGORIES = [
-  { id: "fash", code: "FASH", label: "Fashion" },
-  { id: "groc", code: "GROC", label: "Grocery" },
-  { id: "elec", code: "ELEC", label: "Electronics" },
-  { id: "home", code: "HOME", label: "Home" },
+  { id: "fash", label: "Fashion", icon: "Shirt" },
+  { id: "groc", label: "Grocery", icon: "Apple" },
+  { id: "elec", label: "Electronics", icon: "Tv" },
+  { id: "home", label: "Home", icon: "Home" },
 ];
 
 export const MOCK_STORE_CATEGORIES = [
