@@ -11,11 +11,15 @@ class ResetDemoResponse(BaseModel):
     canonical_bill: Optional[str] = None
     stores: Optional[List[str]] = None
 
-# Scan Models
-class ScanRequest(BaseModel):
-    store_id: str
-    barcode: str
+# Store Models
+class StoreResponse(BaseModel):
+    id: str
+    retailer_id: Optional[str] = None
+    name: str
+    area: str
+    code: str
 
+# Product Models
 class ProductResponse(BaseModel):
     id: str
     store_id: str
@@ -26,35 +30,67 @@ class ProductResponse(BaseModel):
     stock: int
     in_stock: bool
 
-# Store Models
-class StoreResponse(BaseModel):
-    id: str
-    retailer_id: str
-    name: str
-    area: str
-    code: str
-
-# Order & Cart Models
-class CreateOrderRequest(BaseModel):
+# Scan Models
+class ScanRequest(BaseModel):
     store_id: str
+    barcode: str
 
-class AddItemRequest(BaseModel):
+# Checkout & Order Models
+class CheckoutItem(BaseModel):
     barcode: str
     qty: int = 1
 
-class UpdateItemRequest(BaseModel):
-    qty: int
+class CheckoutRequest(BaseModel):
+    store_id: str
+    items: List[CheckoutItem]
+    payment_method: Optional[str] = "UPI_MOCK"
 
-class PayMockRequest(BaseModel):
+class CheckoutResponse(BaseModel):
+    order_id: str
+    total: int
+    status: str
+    store_id: str
+    items: List[Any]
+
+class MockPayRequest(BaseModel):
     method: str = "UPI_MOCK"
 
-# Exit Verify Models
-class ExitVerifyRequest(BaseModel):
+class MockPayResponse(BaseModel):
+    order_id: str
     bill_no: str
-    bag_items: List[str]
+    qr_token: str
+    total: int
+    status: str
+    store_id: str
+    paid_at: Optional[str] = None
+    items: Optional[List[Any]] = None
 
-# Dashboard Models
-class ImpactMetrics(BaseModel):
-    digital_bills_total: int
-    paper_saved_sheets: int
-    checkout_time_saved_minutes: int
+# Staff Models
+class CashConfirmResponse(BaseModel):
+    order_id: str
+    bill_no: str
+    qr_token: str
+    total: int
+    status: str
+
+class ExitVerifyRequest(BaseModel):
+    bill_id: Optional[str] = None
+    bill_no: Optional[str] = None
+    bag_items: Optional[List[str]] = []
+
+class ExitUseRequest(BaseModel):
+    bill_id: Optional[str] = None
+    bill_no: Optional[str] = None
+
+class ExitVerifyResponse(BaseModel):
+    status: str # VERIFIED, ALREADY_USED, INVALID, WRONG_STORE, MISMATCH
+    message: Optional[str] = None
+    bill_no: Optional[str] = None
+    order_id: Optional[str] = None
+    store_name: Optional[str] = None
+    store_code: Optional[str] = None
+    total: Optional[int] = None
+    items: Optional[List[Any]] = None
+    used_at: Optional[str] = None
+    created_at: Optional[str] = None
+    customer_name: Optional[str] = None

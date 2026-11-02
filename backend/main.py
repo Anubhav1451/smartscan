@@ -13,6 +13,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -26,6 +27,28 @@ app.include_router(orders.router)
 app.include_router(bills.router)
 app.include_router(staff.router)
 app.include_router(dashboard.router)
+
+from fastapi import Depends
+from core.auth import get_current_user, UserProfile
+from core.db import get_supabase
+
+@app.get("/auth/me", tags=["Auth"])
+def get_me(user: UserProfile = Depends(get_current_user)):
+    """Return authenticated caller profile loaded server-side."""
+    sb = get_supabase()
+    store = None
+    if user.store_id:
+        s_res = sb.table("stores").select("id, name, code, area").eq("id", user.store_id).execute()
+        if s_res.data:
+            store = s_res.data[0]
+    return {
+        "id": user.id,
+        "email": user.email,
+        "role": user.role,
+        "store_id": user.store_id,
+        "display_name": user.display_name,
+        "store": store
+    }
 
 @app.get("/", tags=["Health"])
 def root_health():
