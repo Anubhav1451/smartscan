@@ -51,6 +51,7 @@ def get_me(user: UserProfile = Depends(get_current_user)):
     }
 
 @app.get("/", tags=["Health"])
+@app.get("/health", tags=["Health"])
 def root_health():
     """Health check endpoint to verify backend status."""
     return {
@@ -62,4 +63,7 @@ def root_health():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    import os
+    port = int(os.getenv("PORT", settings.PORT))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
+
