@@ -115,7 +115,7 @@ All seeded demo accounts share one common password: **`SmartScanDemo2026!`**
 - [x] **Screen 3 — Scanner UI**: Camera viewfinder shell with corner brackets, barcode illustration, torch toggle, manual entry fallback, and detected product card.
 - [x] **Screenshots Captured**: Stored at `screenshots/phase1/` (`home.png`, `store.png`, `scanner.png`) for design gate review.
 
-### Phase 2: Core Flow — Live API, Scan, Cart, Mock Pay, Bill QR, Exit Gate (Completed & Verified)
+### Phase 2: Core Flow — Live API, Scan, Cart, Mock Pay, Bill QR, Exit Gate (Approved)
 - [x] **Supabase JWT Middleware & Server Profile**: Fast JWT verification with PyJWKClient (ES256 asymmetric ECC) + legacy HS256 fallback; user profile (`role`, `store_id`) resolved strictly server-side from PostgreSQL via `GET /auth/me`.
 - [x] **Backend Endpoints (`FastAPI`)**:
   - `GET /stores` — Returns live list of stores.
@@ -146,5 +146,41 @@ All seeded demo accounts share one common password: **`SmartScanDemo2026!`**
   - (g) Exit verification lifecycle (`VERIFIED` -> `ALREADY USED` -> `INVALID` on fake ID): **PASSED**
   - (h) Cash payment flow: order in cash-pending list, staff confirmation activates customer bill: **PASSED**
 - [x] **Screenshots Captured**: 11 screenshots saved in `screenshots/phase2/` (`login.png`, `home.png`, `store.png`, `scanner-found.png`, `scanner-notfound.png`, `cart.png`, `payment.png`, `bill.png`, `exit-verified.png`, `exit-used.png`, `cash-list.png`).
+
+### Phase 3: Manager Dashboard, Impact, Simulated RFID Mismatch, Demo Reset, PWA (Completed & Verified)
+- [x] **Manager Dashboard (Desktop-First)**:
+  - Built desktop-first layout matching Design G board with deep green sidebar (`#0C3B21`), multi-store switcher (FreshMart, StyleHub, DailyNeeds), and date-range toggle (`Today` / `Last 7 Days`).
+  - Authoritative KPI Cards computed from live database transactions: Sales total, Orders count, Items sold, and Average bill value.
+  - Custom pure SVG / CSS 7-day sales bar chart showing daily revenue breakdown without heavy external chart libraries.
+  - Top Products ranking with units sold and total revenue.
+  - Recent Transactions table with customer display names, item count, payment method (UPI / Card / Cash), and color-coded status badges (`Paid`, `Verified`, `Staff Pending`, `Mismatch`).
+  - Low stock inventory list (items with stock <= 5, with out-of-stock items muted and non-alert styled).
+- [x] **Impact Panel (Rule-Based SDG 12 Analytics)**:
+  - Queue time saved (estimated) = paid orders × 4 minutes, presented in hours with prominent "Estimated" label.
+  - Paper receipts avoided = paid orders count (100% digital cryptographically signed QR receipts).
+  - Items scanned = total items sold across all store checkouts.
+  - Strictly rule-based analytics calculated from transaction records; never labelled "AI".
+- [x] **Simulated RFID Bag Check & Mismatch Flow**:
+  - Staff Gate verification view equipped with permanently labelled "SIMULATED RFID BAG CHECK" portal.
+  - Setup control allows staff to simulate bag contents (default = billed items; toggle = "Add unbilled item (Demo T-Shirt)").
+  - Backend endpoint `POST /exit/rfid-check`: compares bag vs bill server-side and logs verification in `exit_verifications`.
+  - Toggle OFF: returns success green panel "All items match the bill" and enables exit.
+  - Toggle ON: returns full red alert panel "MISMATCH — 1 item in the bag is not on the bill: Demo T-Shirt".
+  - Staff resolution action "Item Returned — Proceed" marks bill `VERIFIED_USED` and authorizes exit.
+- [x] **In-App Demo Data Reset**:
+  - "Reset Demo Data" button with confirmation modal on Manager Dashboard calling `POST /dashboard/reset-demo`.
+  - Atomically restores 3 stores, 16 catalog products, clean inventory levels, canonical bill `SS-20481`, and 40 past transactions in one click.
+- [x] **PWA Polish**:
+  - Generated crisp 192x192 and 512x512 PWA icons and maskable variants matching brand mark (shopping bag + check mark on `#14532D`).
+  - Web app manifest (`frontend/public/manifest.json`) configured with `display: standalone`, `theme_color: #14532D`, `background_color: #F6F2E7`.
+  - Updated `favicon.svg` and `index.html` with apple-touch-icon links for Android Chrome Add-to-Home-Screen support.
+- [x] **Automated Self-Test Results (a)-(e)**:
+  - (a) Dashboard Today's Sales equals sum of today's PAID orders in DB: **PASSED** (Both equal ₹2,212).
+  - (b) 7-Day sales chart totals match database daily sums: **PASSED** (Tue ₹2505, Wed ₹2125, Thu ₹2610, Fri ₹2895, Sat ₹1850, Sun ₹2135, Mon ₹2212).
+  - (c) Canonical seeded history in Recent Transactions & Top Products: **PASSED** (`SS-20481`, `SS-20480`, `SS-20479` displayed accurately).
+  - (d) RFID check toggle OFF -> MATCH; toggle ON -> MISMATCH red panel; Item Returned allows exit: **PASSED**.
+  - (e) Reset from dashboard restores counts to 3 stores / 16 products / 40 orders: **PASSED**.
+- [x] **Screenshots Captured**: 5 screenshots saved in `screenshots/phase3/` (`dashboard.png`, `dashboard-impact.png`, `rfid-match.png`, `rfid-mismatch.png`, `reset.png`).
+
 
 

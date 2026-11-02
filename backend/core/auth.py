@@ -137,3 +137,13 @@ def require_staff_or_manager(user: UserProfile = Depends(get_current_user)) -> U
             detail={"error": "Staff profile must be assigned to a store", "code": "NO_STORE_ASSIGNED"}
         )
     return user
+
+def require_manager(user: UserProfile = Depends(get_current_user)) -> UserProfile:
+    """Enforces caller role is manager."""
+    if user.role != "manager":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "Access forbidden: manager role required", "code": "FORBIDDEN"}
+        )
+    return user
+

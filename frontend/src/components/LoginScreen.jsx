@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { Lock, Mail, ArrowRight, ShieldCheck, AlertCircle, Loader2 } from 'lucide-react';
 
 export default function LoginScreen() {
-  const { signIn, signInDemo, signInStaffDemo } = useAuth();
+  const { signIn, signInDemo, signInStaffDemo, signInManagerDemo } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -50,6 +50,19 @@ export default function LoginScreen() {
       setDemoLoading(false);
     }
   };
+
+  const handleManagerDemo = async () => {
+    setError('');
+    setDemoLoading(true);
+    try {
+      await signInManagerDemo();
+    } catch (err) {
+      setError(err.message || 'Manager login failed.');
+    } finally {
+      setDemoLoading(false);
+    }
+  };
+
 
   return (
     <div className="flex-1 flex flex-col justify-between px-6 py-8 overflow-y-auto bg-cream">
@@ -153,14 +166,21 @@ export default function LoginScreen() {
           )}
         </button>
 
-        {/* Quick Staff link */}
-        <div className="mt-4 text-center">
+        {/* Quick Staff & Manager links */}
+        <div className="mt-4 text-center space-y-2">
           <button
             type="button"
             onClick={handleStaffDemo}
-            className="text-xs text-primary hover:underline font-semibold"
+            className="text-xs text-primary hover:underline font-semibold block w-full"
           >
             Switch to Exit Staff Demo (FreshMart)
+          </button>
+          <button
+            type="button"
+            onClick={handleManagerDemo}
+            className="text-xs text-primary-dark hover:underline font-semibold block w-full"
+          >
+            Switch to Manager Dashboard Demo (FreshMart)
           </button>
         </div>
       </div>

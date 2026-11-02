@@ -122,4 +122,27 @@ export const api = {
       body: JSON.stringify({ bill_id: billId }),
     });
   },
+
+  async rfidCheck(billId, extraItem = false) {
+    return request('/exit/rfid-check', {
+      method: 'POST',
+      body: JSON.stringify({ bill_id: billId, extra_item: extraItem }),
+    });
+  },
+
+  // Manager Dashboard
+  async getDashboardSummary(storeId, range = 'today') {
+    const query = new URLSearchParams();
+    if (storeId) query.set('store_id', storeId);
+    if (range) query.set('range', range);
+    return request(`/dashboard/summary?${query.toString()}`);
+  },
+
+  async resetDemoData() {
+    return request('/dashboard/reset-demo', {
+      method: 'POST',
+      body: JSON.stringify({ confirm: true }),
+    });
+  },
 };
+

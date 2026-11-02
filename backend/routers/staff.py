@@ -7,7 +7,9 @@ from core.auth import require_staff_or_manager, UserProfile
 from models.schemas import (
     ExitVerifyRequest,
     ExitUseRequest,
-    ExitVerifyResponse
+    ExitVerifyResponse,
+    RFIDCheckRequest,
+    RFIDCheckResponse
 )
 
 logger = logging.getLogger(__name__)
@@ -153,10 +155,114 @@ def verify_exit_bill(req: ExitVerifyRequest, staff: UserProfile = Depends(requir
             customer_name=customer_info.get("display_name")
         )
     
+    if order["status"] == "MISMATCH":
+        return ExitVerifyResponse(
+            status="MISMATCH",
+            message="Under review at exit (mismatch detected)",
+            bill_no=order.get("bill_no"),
+            order_id=order["id"],
+            store_name=store_info.get("name"),
+            store_code=store_info.get("code"),
+            total=order["total"],
+            items=items,
+            created_at=order.get("created_at"),
+            customer_name=customer_info.get("display_name")
+        )
+
     return ExitVerifyResponse(
         status="INVALID",
         message=f"Bill status is {order['status']} (payment not completed)"
     )
+
+@router.post("/exit/rfid-check", response_model=RFIDCheckResponse)
+def check_exit_rfid(req: RFIDCheckRequest, staff: UserProfile = Depends(require_staff_or_manager)):
+    """
+    Simulated RFID bag check:
+    - If extra_item is False: Bag contents equal billed items -> MATCH
+    - If extra_item is True: Bag contents have an unbilled item (e.g. Demo T-Shirt) -> MISMATCH
+    Records result in exit_verifications table.
+    """
+    target = req.bill_id or req.bill_no
+    if not target:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "No bill identifier provided", "code": "MISSING_ID"}
+        )
+    
+    order = find_order_for_verification(target)
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "Bill not found", "code": "NOT_FOUND"}
+        )
+    
+    if order["store_id"] != staff.store_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "Bill belongs to another store", "code": "WRONG_STORE"}
+        )
+    
+    sb = get_supabase()
+    items_res = sb.table("order_items").select(
+        "id, product_id, name_snapshot, price_snapshot, qty"
+    ).eq("order_id", order["id"]).execute()
+    billed_items = items_res.data or []
+    
+    if not req.extra_item:
+        # MATCH case
+        bag_items = [{"name": it["name_snapshot"], "qty": it["qty"]} for it in billed_items]
+        
+        # Record verification MATCH
+        sb.table("exit_verifications").insert({
+            "order_id": order["id"],
+            "staff_id": staff.id,
+            "result": "VERIFIED",
+            "bag_items": bag_items
+        }).execute()
+        
+        return RFIDCheckResponse(
+            status="MATCH",
+            message="All items match the bill",
+            bill_no=order.get("bill_no"),
+            order_id=order["id"],
+            billed_items=billed_items,
+            bag_items=bag_items,
+            extra_items=[],
+            unbilled_count=0
+        )
+    else:
+        # MISMATCH case: Bag contains unbilled item (Demo T-Shirt)
+        unbilled_item = {
+            "name": "Demo T-Shirt",
+            "category": "Apparel",
+            "price": 799,
+            "qty": 1,
+            "reason": "Unscanned item detected by RFID antenna"
+        }
+        bag_items = [{"name": it["name_snapshot"], "qty": it["qty"]} for it in billed_items] + [unbilled_item]
+        
+        # Update order status to MISMATCH
+        sb.table("orders").update({"status": "MISMATCH"}).eq("id", order["id"]).execute()
+        
+        # Record verification MISMATCH
+        sb.table("exit_verifications").insert({
+            "order_id": order["id"],
+            "staff_id": staff.id,
+            "result": "MISMATCH",
+            "bag_items": bag_items
+        }).execute()
+        
+        return RFIDCheckResponse(
+            status="MISMATCH",
+            message="MISMATCH — 1 item in the bag is not on the bill: Demo T-Shirt",
+            bill_no=order.get("bill_no"),
+            order_id=order["id"],
+            billed_items=billed_items,
+            bag_items=bag_items,
+            extra_items=[unbilled_item],
+            unbilled_count=1
+        )
+
 
 @router.post("/exit/use")
 def mark_bill_used(req: ExitUseRequest, staff: UserProfile = Depends(require_staff_or_manager)):

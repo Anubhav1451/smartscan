@@ -28,6 +28,12 @@ export default function StaffScreen() {
   const [verifyResult, setVerifyResult] = useState(null); // { status, bill_no, order_id, ... }
   const [markingUsed, setMarkingUsed] = useState(false);
 
+  // RFID Simulation state
+  const [rfidExtraItem, setRfidExtraItem] = useState(false);
+  const [rfidChecking, setRfidChecking] = useState(false);
+  const [rfidResult, setRfidResult] = useState(null);
+  const [managerAlerted, setManagerAlerted] = useState(false);
+
   // Scanner modal state
   const [showScanner, setShowScanner] = useState(false);
   const videoRef = useRef(null);
@@ -60,6 +66,9 @@ export default function StaffScreen() {
     if (!cleaned) return;
 
     setVerifying(true);
+    setRfidResult(null);
+    setRfidExtraItem(false);
+    setManagerAlerted(false);
     try {
       const res = await api.verifyExitBill(cleaned);
       setVerifyResult(res);
@@ -75,6 +84,27 @@ export default function StaffScreen() {
       setVerifying(false);
     }
   };
+
+  const handleRunRfidCheck = async () => {
+    if (!verifyResult?.order_id && !verifyResult?.bill_no) return;
+    setRfidChecking(true);
+    setManagerAlerted(false);
+    try {
+      await new Promise((r) => setTimeout(r, 800));
+      const target = verifyResult.order_id || verifyResult.bill_no;
+      const res = await api.rfidCheck(target, rfidExtraItem);
+      setRfidResult(res);
+    } catch (err) {
+      console.error('RFID check failed:', err);
+      setRfidResult({
+        status: 'MISMATCH',
+        message: err.message || 'RFID sensor check failed.',
+      });
+    } finally {
+      setRfidChecking(false);
+    }
+  };
+
 
   // Mark Bill Used
   const handleMarkUsed = async () => {
@@ -309,14 +339,141 @@ export default function StaffScreen() {
               </div>
             )}
 
+            {/* SIMULATED RFID BAG CHECK PANEL */}
+            {verifyResult.status === 'VERIFIED' && (
+              <div className="pt-3 border-t border-surface-tint space-y-3">
+                <div className="bg-surface-tint/60 rounded-card-sm p-3 border border-surface-tint space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                      <span className="font-bold text-xs text-primary uppercase tracking-wide">
+                        SIMULATED RFID BAG CHECK
+                      </span>
+                    </div>
+                    <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-semibold">
+                      Simulated Sensor
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-ink-muted">
+                    Simulates physical RFID portal antenna scanning items currently placed inside customer bag.
+                  </p>
+
+                  {/* Bag contents simulation setup */}
+                  <div className="p-2.5 bg-cream rounded-xs border border-surface-tint/80 space-y-2">
+                    <span className="text-[10px] font-bold uppercase text-ink-muted block">
+                      Simulation Setup
+                    </span>
+                    <label className="flex items-center gap-2 cursor-pointer text-xs select-none">
+                      <input
+                        type="checkbox"
+                        checked={rfidExtraItem}
+                        onChange={(e) => {
+                          setRfidExtraItem(e.target.checked);
+                          setRfidResult(null);
+                          setManagerAlerted(false);
+                        }}
+                        className="w-4 h-4 rounded text-primary focus:ring-primary accent-primary"
+                      />
+                      <span className="font-medium text-ink">
+                        Add unbilled item <strong className="text-alert font-semibold">(Demo T-Shirt)</strong>
+                      </span>
+                    </label>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={rfidChecking}
+                    onClick={handleRunRfidCheck}
+                    className="w-full py-2.5 bg-primary hover:bg-primary-dark text-white text-xs font-bold rounded-xs transition flex items-center justify-center gap-1.5 shadow-xs"
+                  >
+                    {rfidChecking ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Scanning bag via RFID...</span>
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span>Run Bag Check</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* RFID Match Result */}
+                {rfidResult?.status === 'MATCH' && (
+                  <div className="p-3 bg-success/10 border border-success/30 rounded-card-sm text-success space-y-1">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 shrink-0" />
+                      <span className="font-bold text-xs uppercase tracking-wide">All items match the bill</span>
+                    </div>
+                    <p className="text-[11px] text-ink-muted">
+                      RFID sensor verified all {verifyResult.items?.length || 0} billed items inside the bag. No extra items detected.
+                    </p>
+                  </div>
+                )}
+
+                {/* RFID Mismatch Result (Full Red Alert Panel) */}
+                {rfidResult?.status === 'MISMATCH' && (
+                  <div className="p-3.5 bg-alert/10 border-2 border-alert rounded-card-sm text-alert space-y-2.5 animate-in fade-in zoom-in-95">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-extrabold text-xs tracking-wider uppercase block">
+                          MISMATCH DETECTED
+                        </span>
+                        <p className="text-xs font-semibold text-alert mt-0.5">
+                          MISMATCH — 1 item in the bag is not on the bill: <u>Demo T-Shirt</u>
+                        </p>
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-ink-muted bg-white/70 p-2 rounded-xs border border-alert/20">
+                      Unscanned item was detected by the simulated RFID exit antenna. The bill cannot be marked used until resolved.
+                    </p>
+
+                    {managerAlerted && (
+                      <div className="p-2 bg-amber-500/10 border border-amber-500/30 rounded-xs text-pending text-xs font-semibold flex items-center gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                        <span>Store Manager alerted. Customer held at Exit Gate.</span>
+                      </div>
+                    )}
+
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        type="button"
+                        disabled={markingUsed}
+                        onClick={handleMarkUsed}
+                        className="flex-1 py-2.5 bg-success hover:bg-success/90 text-white font-bold text-xs rounded-xs transition shadow-xs"
+                      >
+                        {markingUsed ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin mx-auto" />
+                        ) : (
+                          'Item Returned — Proceed'
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setManagerAlerted(true)}
+                        className="px-3 py-2.5 bg-alert/20 hover:bg-alert/30 text-alert border border-alert/40 font-bold text-xs rounded-xs transition"
+                      >
+                        Call Manager
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Action Buttons */}
             <div className="flex gap-2 pt-1">
-              {verifyResult.status === 'VERIFIED' && (
+              {verifyResult.status === 'VERIFIED' && rfidResult?.status !== 'MISMATCH' && (
                 <button
                   type="button"
                   disabled={markingUsed}
                   onClick={handleMarkUsed}
-                  className="flex-1 py-3 bg-success hover:bg-success/90 text-white font-bold text-xs rounded-card-sm transition flex items-center justify-center gap-1.5"
+                  className="flex-1 py-3 bg-success hover:bg-success/90 text-white font-bold text-xs rounded-card-sm transition flex items-center justify-center gap-1.5 shadow-sm"
                 >
                   {markingUsed ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -330,7 +487,12 @@ export default function StaffScreen() {
               )}
               <button
                 type="button"
-                onClick={() => setVerifyResult(null)}
+                onClick={() => {
+                  setVerifyResult(null);
+                  setRfidResult(null);
+                  setRfidExtraItem(false);
+                  setManagerAlerted(false);
+                }}
                 className="px-4 py-3 bg-neutral-100 hover:bg-neutral-200 text-ink text-xs font-semibold rounded-card-sm transition"
               >
                 Dismiss
@@ -338,6 +500,7 @@ export default function StaffScreen() {
             </div>
           </div>
         )}
+
 
         {/* Cash Payments Pending Section */}
         <div className="space-y-3">

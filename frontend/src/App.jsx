@@ -12,7 +12,7 @@ import CashPendingCustomerScreen from './components/CashPendingCustomerScreen';
 import BillScreen from './components/BillScreen';
 import OrdersListScreen from './components/OrdersListScreen';
 import StaffScreen from './components/StaffScreen';
-import ManagerPlaceholder from './components/ManagerPlaceholder';
+import ManagerDashboard from './components/ManagerDashboard';
 import { Loader2 } from 'lucide-react';
 
 function AppContent() {
@@ -86,13 +86,9 @@ function AppContent() {
     );
   }
 
-  // 3. Manager routed to placeholder
+  // 3. Manager routed to desktop-first Manager Dashboard
   if (profile?.role === 'manager') {
-    return (
-      <PhoneFrame currentScreen="manager" onNavigate={() => {}}>
-        <ManagerPlaceholder />
-      </PhoneFrame>
-    );
+    return <ManagerDashboard />;
   }
 
   // 4. Customer screens
