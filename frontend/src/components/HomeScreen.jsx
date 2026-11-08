@@ -1,15 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { 
   ShoppingBag, 
-  Search, 
-  ScanLine, 
   Home as HomeIcon, 
   FileText, 
   LogOut, 
-  Shirt,
-  Apple,
-  Tv,
-  Sofa,
   AlertTriangle
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -49,19 +43,11 @@ function SmartScanBrandMark({ className = "w-8 h-8" }) {
   );
 }
 
-const CATEGORY_ITEMS = [
-  { id: 'fashion', label: 'Fashion', icon: Shirt },
-  { id: 'grocery', label: 'Grocery', icon: Apple },
-  { id: 'electronics', label: 'Electronics', icon: Tv },
-  { id: 'home', label: 'Home', icon: Sofa },
-];
-
 export default function HomeScreen({ onNavigate }) {
   const { profile, signOut } = useAuth();
   const { selectStore, selectedStore, pendingStoreSwitch, confirmStoreSwitch, cancelStoreSwitch, cartCount } = useCart();
   
   const [stores, setStores] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -92,17 +78,12 @@ export default function HomeScreen({ onNavigate }) {
     }
   };
 
-  const filteredStores = stores.filter(store => 
-    store.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    store.area.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
   const displayName = profile?.display_name || 'Anubhav';
 
   return (
     <div className="flex flex-col h-full bg-cream text-ink select-none relative">
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto px-5 pt-3 pb-6 space-y-5">
+      <div className="flex-1 overflow-y-auto px-5 pt-3 pb-6 space-y-6">
         
         {/* App Header with locked brand mark and logout */}
         <header className="flex items-center justify-between pt-1">
@@ -135,39 +116,8 @@ export default function HomeScreen({ onNavigate }) {
           </p>
         </div>
 
-        {/* Search Bar */}
-        <div className="relative">
-          <Search className="w-4 h-4 text-ink-muted absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-          <input 
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search stores or products..."
-            className="w-full bg-white text-xs pl-10 pr-4 py-3 rounded-card-sm border border-surface-tint placeholder:text-ink-muted focus:outline-none focus:border-primary transition-colors shadow-xs"
-          />
-        </div>
-
-        {/* Scan Hero Banner */}
-        <div 
-          onClick={() => onNavigate('scanner')}
-          className="bg-primary text-white rounded-card p-5 shadow-sm relative overflow-hidden cursor-pointer hover:bg-primary-dark transition-all active:scale-[0.99] group"
-        >
-          <div className="max-w-[70%] space-y-1">
-            <h3 className="text-base font-bold tracking-tight">Scan. Pay. Walk Out.</h3>
-            <p className="text-xs text-white/80 font-normal">No Queues. No Hassle.</p>
-          </div>
-          
-          <button 
-            type="button" 
-            aria-label="Start Scanning"
-            className="absolute right-5 top-1/2 -translate-y-1/2 w-11 h-11 rounded-card-sm bg-white/15 flex items-center justify-center text-white group-hover:bg-white/25 transition-colors"
-          >
-            <ScanLine className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Our Stores Section */}
-        <div className="space-y-3">
+        {/* Our Stores Section - store selection ONLY */}
+        <div className="space-y-3 pt-1">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-sm text-ink tracking-tight">Our Stores</h3>
             <span className="text-[11px] text-ink-muted font-medium">Tap to enter store</span>
@@ -181,7 +131,7 @@ export default function HomeScreen({ onNavigate }) {
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-3">
-              {filteredStores.map((store) => {
+              {stores.map((store) => {
                 const isSelected = selectedStore?.id === store.id;
                 return (
                   <div 
@@ -210,31 +160,6 @@ export default function HomeScreen({ onNavigate }) {
               })}
             </div>
           )}
-        </div>
-
-        {/* Shop by Category Section */}
-        <div className="space-y-3">
-          <h3 className="font-bold text-sm text-ink tracking-tight">Shop by Category</h3>
-          
-          <div className="grid grid-cols-4 gap-2">
-            {CATEGORY_ITEMS.map((cat) => {
-              const Icon = cat.icon;
-              return (
-                <div 
-                  key={cat.id}
-                  onClick={() => onNavigate('store', { category: cat.id })}
-                  className="bg-white rounded-card p-2 border border-surface-tint shadow-xs flex flex-col items-center justify-center text-center cursor-pointer hover:border-primary/40 transition-all active:scale-[0.98]"
-                >
-                  <div className="w-9 h-9 rounded-card-sm bg-surface-tint text-primary flex items-center justify-center mb-1.5 shadow-2xs">
-                    <Icon className="w-4 h-4 stroke-[2.2]" />
-                  </div>
-                  <span className="text-[10px] font-semibold text-ink leading-tight text-center whitespace-nowrap">
-                    {cat.label}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
         </div>
 
       </div>

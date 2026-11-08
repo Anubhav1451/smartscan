@@ -153,7 +153,9 @@ export default function ScannerScreen({ onNavigate }) {
       setIsAdded(true);
       setTimeout(() => {
         setIsAdded(false);
-      }, 2000);
+        setDetectionState(null);
+        onNavigate('store');
+      }, 400);
     }
   };
 
@@ -269,9 +271,12 @@ export default function ScannerScreen({ onNavigate }) {
                   <h4 className="font-bold text-xs text-ink">
                     {detectionState.product.name}
                   </h4>
-                  <p className="text-primary font-extrabold text-sm">
-                    ₹{detectionState.product.price}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-primary font-extrabold text-sm">
+                      ₹{detectionState.product.price}
+                    </p>
+                    <span className="text-[10px] text-ink-muted">· Stock: {detectionState.product.stock}</span>
+                  </div>
                 </div>
               </div>
 
@@ -280,27 +285,40 @@ export default function ScannerScreen({ onNavigate }) {
               </span>
             </div>
 
-            <button 
-              type="button"
-              onClick={handleAddDetected}
-              className={`w-full py-3.5 rounded-card-sm text-xs font-bold transition-all shadow-xs flex items-center justify-center space-x-1.5 ${
-                isAdded 
-                  ? 'bg-success text-white' 
-                  : 'bg-primary text-white hover:bg-primary-dark active:scale-[0.99]'
-              }`}
-            >
-              {isAdded ? (
-                <>
-                  <Check className="w-4 h-4 stroke-[3]" />
-                  <span>Added to Cart</span>
-                </>
-              ) : (
-                <>
-                  <Plus className="w-4 h-4 stroke-[2.5]" />
-                  <span>Add to Cart</span>
-                </>
-              )}
-            </button>
+            <div className="flex gap-2">
+              <button 
+                type="button"
+                onClick={handleAddDetected}
+                className={`flex-1 py-3.5 rounded-card-sm text-xs font-bold transition-all shadow-xs flex items-center justify-center space-x-1.5 ${
+                  isAdded 
+                    ? 'bg-success text-white' 
+                    : 'bg-primary text-white hover:bg-primary-dark active:scale-[0.99]'
+                }`}
+              >
+                {isAdded ? (
+                  <>
+                    <Check className="w-4 h-4 stroke-[3]" />
+                    <span>Added to Cart</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4 stroke-[2.5]" />
+                    <span>Add to Cart</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setDetectionState(null);
+                  setManualBarcode('');
+                }}
+                className="px-4 py-3.5 rounded-card-sm text-xs font-semibold bg-neutral-100 hover:bg-neutral-200 text-ink transition active:scale-95"
+              >
+                Scan Next
+              </button>
+            </div>
           </div>
         )}
 
@@ -389,7 +407,7 @@ export default function ScannerScreen({ onNavigate }) {
           >
             <div className="flex items-center space-x-2 font-bold text-xs">
               <ShoppingBag className="w-4 h-4 text-white" />
-              <span>{cartCount} items · ₹{cartTotal}</span>
+              <span>{cartCount} {cartCount === 1 ? 'item' : 'items'} · ₹{cartTotal}</span>
             </div>
             <span className="text-xs font-semibold text-white/90">View Cart →</span>
           </div>

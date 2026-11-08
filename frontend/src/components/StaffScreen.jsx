@@ -259,6 +259,7 @@ export default function StaffScreen() {
                 <div className="leading-tight">
                   <span className="font-extrabold text-xs tracking-wider uppercase">VERIFIED</span>
                   <p className="text-[11px] text-ink-muted mt-0.5">Payment confirmed. Authorized for exit.</p>
+                  <p className="text-xs font-semibold text-success mt-1">Payment verified — genuine bill</p>
                 </div>
               </div>
             )}
@@ -295,6 +296,7 @@ export default function StaffScreen() {
                   <p className="text-[11px] text-ink-muted mt-0.5">
                     {verifyResult.message || 'Invalid bill code or unpaid transaction.'}
                   </p>
+                  <p className="text-xs font-bold text-alert mt-1">Payment NOT verified — do not allow exit</p>
                 </div>
               </div>
             )}
