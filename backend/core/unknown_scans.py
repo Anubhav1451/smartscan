@@ -1,102 +1,102 @@
-import os
-import sqlite3
-import uuid
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from core.db import get_supabase
 
-DB_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
-DB_PATH = os.path.join(DB_DIR, "unknown_scans.sqlite3")
 
-def init_db():
-    os.makedirs(DB_DIR, exist_ok=True)
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS unknown_scans (
-                id TEXT PRIMARY KEY,
-                store_id TEXT NOT NULL,
-                barcode TEXT NOT NULL,
-                count INTEGER NOT NULL DEFAULT 1,
-                last_scanned_at TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                UNIQUE(store_id, barcode)
-            )
-        """)
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_unknown_store ON unknown_scans(store_id)")
-        conn.commit()
-
-init_db()
-
-def record_unknown_scan(store_id: str, barcode: str):
+def record_unknown_scan(store_id: str, barcode: str) -> None:
     """
-    Log an unknown barcode scan for a store.
+    Log an unknown barcode scan for a store into Supabase.
     If it was already scanned before, increment count and update last_scanned_at.
     """
     cleaned_barcode = barcode.strip()
     if not cleaned_barcode:
         return
 
+    sb = get_supabase()
     now_iso = datetime.now(timezone.utc).isoformat()
-    scan_id = str(uuid.uuid4())
 
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute("""
-            INSERT INTO unknown_scans (id, store_id, barcode, count, last_scanned_at, created_at)
-            VALUES (?, ?, ?, 1, ?, ?)
-            ON CONFLICT(store_id, barcode) DO UPDATE SET
-                count = count + 1,
-                last_scanned_at = excluded.last_scanned_at
-        """, (scan_id, store_id, cleaned_barcode, now_iso, now_iso))
-        conn.commit()
+    try:
+        # Check if row already exists for (store_id, barcode)
+        res = sb.table("unknown_scans").select("id, count").eq("store_id", store_id).eq("barcode", cleaned_barcode).execute()
+        if res.data and len(res.data) > 0:
+            existing = res.data[0]
+            current_count = existing.get("count", 1)
+            sb.table("unknown_scans").update({
+                "count": current_count + 1,
+                "last_scanned_at": now_iso
+            }).eq("id", existing["id"]).execute()
+        else:
+            sb.table("unknown_scans").insert({
+                "store_id": store_id,
+                "barcode": cleaned_barcode,
+                "count": 1,
+                "last_scanned_at": now_iso,
+                "created_at": now_iso
+            }).execute()
+    except Exception:
+        # Handle concurrent conflict on UNIQUE(store_id, barcode)
+        try:
+            res = sb.table("unknown_scans").select("id, count").eq("store_id", store_id).eq("barcode", cleaned_barcode).execute()
+            if res.data and len(res.data) > 0:
+                existing = res.data[0]
+                current_count = existing.get("count", 1)
+                sb.table("unknown_scans").update({
+                    "count": current_count + 1,
+                    "last_scanned_at": now_iso
+                }).eq("id", existing["id"]).execute()
+        except Exception:
+            pass
+
 
 def get_unknown_scans(store_id: str) -> List[Dict[str, Any]]:
     """
-    Get unknown scans for a store, excluding any barcodes that have since been
-    added to the store's catalogue.
+    Get unknown scans for a store from Supabase, newest first.
+    Exclude and purge any barcodes that have since been added to the store's catalogue.
     """
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
-        cur = conn.execute("""
-            SELECT id, store_id, barcode, count, last_scanned_at, created_at
-            FROM unknown_scans
-            WHERE store_id = ?
-            ORDER BY last_scanned_at DESC
-        """, (store_id,))
-        rows = [dict(r) for r in cur.fetchall()]
+    sb = get_supabase()
+    res = sb.table("unknown_scans").select(
+        "id, store_id, barcode, count, last_scanned_at, created_at"
+    ).eq("store_id", store_id).order("last_scanned_at", desc=True).execute()
 
+    rows = res.data or []
     if not rows:
         return []
 
     # Filter out barcodes already added to the store's catalogue
     try:
-        sb = get_supabase()
         barcodes = [r["barcode"] for r in rows]
-        res = sb.table("products").select("barcode").eq("store_id", store_id).in_("barcode", barcodes).execute()
-        existing_barcodes = set(p["barcode"] for p in (res.data or []))
-        
-        # Purge existing from sqlite so the DB stays lean
-        if existing_barcodes:
-            with sqlite3.connect(DB_PATH) as conn:
-                for b in existing_barcodes:
-                    conn.execute("DELETE FROM unknown_scans WHERE store_id = ? AND barcode = ?", (store_id, b))
-                conn.commit()
+        prod_res = sb.table("products").select("barcode").eq("store_id", store_id).in_("barcode", barcodes).execute()
+        existing_barcodes = set(p["barcode"] for p in (prod_res.data or []))
 
-        return [r for r in rows if r["barcode"] not in existing_barcodes]
-    except Exception as e:
-        # Fallback to returning rows if Supabase query encounters error
+        # Purge existing from unknown_scans in Supabase so the queue stays lean
+        if existing_barcodes:
+            for b in existing_barcodes:
+                sb.table("unknown_scans").delete().eq("store_id", store_id).eq("barcode", b).execute()
+            rows = [r for r in rows if r["barcode"] not in existing_barcodes]
+
+        return rows
+    except Exception:
         return rows
 
+
 def delete_unknown_scan(store_id: str, scan_id: str) -> bool:
-    with sqlite3.connect(DB_PATH) as conn:
-        cur = conn.execute("DELETE FROM unknown_scans WHERE store_id = ? AND id = ?", (store_id, scan_id))
-        conn.commit()
-        return cur.rowcount > 0
+    """
+    Remove the unknown scan row matching store_id + scan_id.
+    Returns True if a row was removed, False otherwise.
+    """
+    sb = get_supabase()
+    res = sb.table("unknown_scans").delete().eq("store_id", store_id).eq("id", scan_id).execute()
+    return bool(res.data and len(res.data) > 0)
 
-def clear_unknown_scans(store_id: Optional[str] = None):
-    with sqlite3.connect(DB_PATH) as conn:
-        if store_id:
-            conn.execute("DELETE FROM unknown_scans WHERE store_id = ?", (store_id,))
-        else:
-            conn.execute("DELETE FROM unknown_scans")
-        conn.commit()
 
+def clear_unknown_scans(store_id: Optional[str] = None) -> None:
+    """
+    Clear unknown scans.
+    With store_id: delete that store's rows.
+    Without store_id: delete all rows (seed reset uses this).
+    """
+    sb = get_supabase()
+    if store_id:
+        sb.table("unknown_scans").delete().eq("store_id", store_id).execute()
+    else:
+        sb.table("unknown_scans").delete().neq("id", "00000000-0000-0000-0000-000000000000").execute()
