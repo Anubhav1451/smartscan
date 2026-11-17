@@ -98,6 +98,25 @@ export const api = {
     return request(`/bills/${encodeURIComponent(billNo)}`);
   },
 
+  // Manager Products & Catalogue (Feature A)
+  async lookupBarcodeForManager(storeId, barcode) {
+    return request(`/stores/${storeId}/products/barcode-lookup?barcode=${encodeURIComponent(barcode)}`);
+  },
+
+  async addStoreProduct(storeId, productData) {
+    return request(`/stores/${storeId}/products`, {
+      method: 'POST',
+      body: JSON.stringify(productData),
+    });
+  },
+
+  async updateStoreProduct(storeId, productId, updateData) {
+    return request(`/stores/${storeId}/products/${productId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updateData),
+    });
+  },
+
   // Exit Staff
   async getStaffCashPending() {
     return request('/staff/cash-pending');

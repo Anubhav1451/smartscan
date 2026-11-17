@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { Lock, Mail, ArrowRight, ShieldCheck, AlertCircle, Loader2 } from 'lucide-react';
 
 export default function LoginScreen() {
-  const { signIn, signInDemo, signInStaffDemo, signInManagerDemo } = useAuth();
+  const { signIn, signInDemo, signInStaffDemo, signInManagerDemo, signInStyleHubManagerDemo } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -58,6 +58,18 @@ export default function LoginScreen() {
       await signInManagerDemo();
     } catch (err) {
       setError(err.message || 'Manager login failed.');
+    } finally {
+      setDemoLoading(false);
+    }
+  };
+
+  const handleStyleHubManagerDemo = async () => {
+    setError('');
+    setDemoLoading(true);
+    try {
+      await signInStyleHubManagerDemo();
+    } catch (err) {
+      setError(err.message || 'StyleHub Manager login failed.');
     } finally {
       setDemoLoading(false);
     }
@@ -181,6 +193,13 @@ export default function LoginScreen() {
             className="text-xs text-primary-dark hover:underline font-semibold block w-full"
           >
             Switch to Manager Dashboard Demo (FreshMart)
+          </button>
+          <button
+            type="button"
+            onClick={handleStyleHubManagerDemo}
+            className="text-xs text-primary hover:underline font-semibold block w-full"
+          >
+            Switch to Manager Dashboard Demo (StyleHub)
           </button>
         </div>
       </div>

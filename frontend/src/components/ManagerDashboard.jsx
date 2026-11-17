@@ -18,10 +18,17 @@ import {
   Loader2,
   Calendar,
   Layers,
-  Store as StoreIcon
+  Store as StoreIcon,
+  Search,
+  Plus,
+  Edit2,
+  Check,
+  X,
+  Tag
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
+import ManagerAddProductModal from './ManagerAddProductModal';
 
 export default function ManagerDashboard() {
   const { profile, signOut } = useAuth();
@@ -96,6 +103,110 @@ export default function ManagerDashboard() {
       setResetting(false);
     }
   };
+
+  // Products Tab State (Part 1 - Feature A)
+  const [storeProducts, setStoreProducts] = useState([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [productSearch, setProductSearch] = useState('');
+  const [showAddProductModal, setShowAddProductModal] = useState(false);
+  const [editingProductId, setEditingProductId] = useState(null);
+  const [inlinePrice, setInlinePrice] = useState('');
+  const [inlineStock, setInlineStock] = useState('');
+  const [savingInline, setSavingInline] = useState(false);
+  const [inlineError, setInlineError] = useState('');
+
+  // Fetch store products
+  const fetchStoreProducts = async () => {
+    if (!selectedStoreId) return;
+    try {
+      setLoadingProducts(true);
+      const data = await api.getStoreProducts(selectedStoreId);
+      setStoreProducts(data || []);
+    } catch (err) {
+      console.error('Failed to load store products:', err);
+    } finally {
+      setLoadingProducts(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'products') {
+      fetchStoreProducts();
+    }
+  }, [selectedStoreId, activeTab]);
+
+  // Inline product editing
+  const startInlineEdit = (prod) => {
+    setEditingProductId(prod.id);
+    setInlinePrice(prod.price.toString());
+    setInlineStock(prod.stock.toString());
+    setInlineError('');
+  };
+
+  const cancelInlineEdit = () => {
+    setEditingProductId(null);
+    setInlinePrice('');
+    setInlineStock('');
+    setInlineError('');
+  };
+
+  const handleSaveInline = async (prod) => {
+    const pNum = parseInt(inlinePrice, 10);
+    const sNum = parseInt(inlineStock, 10);
+
+    if (isNaN(pNum) || pNum < 0) {
+      setInlineError('Price must be a valid whole number >= 0');
+      return;
+    }
+    if (isNaN(sNum) || sNum < 0) {
+      setInlineError('Stock must be a valid whole number >= 0');
+      return;
+    }
+
+    try {
+      setSavingInline(true);
+      setInlineError('');
+      const updated = await api.updateStoreProduct(selectedStoreId, prod.id, {
+        price: pNum,
+        stock: sNum
+      });
+
+      setStoreProducts(prev => prev.map(p => p.id === prod.id ? { ...p, ...updated, in_stock: updated.stock > 0 } : p));
+      setEditingProductId(null);
+      fetchDashboardData();
+    } catch (err) {
+      console.error('Failed to update product inline:', err);
+      setInlineError(err.message || 'Failed to update product');
+    } finally {
+      setSavingInline(false);
+    }
+  };
+
+  const handleProductSaved = (saved) => {
+    setStoreProducts(prev => {
+      const idx = prev.findIndex(p => p.id === saved.id || p.barcode === saved.barcode);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...saved, in_stock: saved.stock > 0 };
+        return next;
+      } else {
+        return [{ ...saved, in_stock: saved.stock > 0 }, ...prev];
+      }
+    });
+    fetchDashboardData();
+  };
+
+  const isManagerForStore = profile?.role === 'manager' && (!profile?.store_id || profile?.store_id === selectedStoreId);
+  const existingCategories = Array.from(new Set(storeProducts.map(p => p.category).filter(Boolean)));
+  const filteredProducts = storeProducts.filter(p => {
+    if (!productSearch.trim()) return true;
+    const term = productSearch.toLowerCase();
+    return (
+      (p.name || '').toLowerCase().includes(term) ||
+      (p.category || '').toLowerCase().includes(term) ||
+      (p.barcode || '').toLowerCase().includes(term)
+    );
+  });
 
   const currentStore = stores.find(s => s.id === selectedStoreId) || { name: 'FreshMart', code: 'FM' };
 
@@ -684,47 +795,252 @@ export default function ManagerDashboard() {
 
           {/* TAB 3: PRODUCTS & INVENTORY */}
           {activeTab === 'products' && (
-            <div className="bg-white p-6 rounded-2xl border border-[#14532D]/10 shadow-xs space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-extrabold text-base text-[#16130E]">Product Catalog ({currentStore.name})</h3>
-                  <p className="text-xs text-[#43543F]">Per-store stock tracking and price configuration</p>
+            <div className="space-y-4">
+              {/* Top Controls & Header Card */}
+              <div className="bg-white p-6 rounded-2xl border border-[#14532D]/10 shadow-xs space-y-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-extrabold text-base text-[#16130E]">Product Catalog ({currentStore.name})</h3>
+                      <span className="text-xs font-bold text-[#14532D] bg-[#E8F1E4] px-2.5 py-0.5 rounded-full">
+                        {storeProducts.length} items
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#43543F] mt-0.5">Authoritative per-store inventory and pricing</p>
+                  </div>
+
+                  {/* Actions: Add Product Button */}
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddProductModal(true)}
+                      disabled={!isManagerForStore}
+                      title={isManagerForStore ? "Add or scan product" : "Read-only: Switch to your assigned store to add products"}
+                      className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 shadow-xs transition ${
+                        isManagerForStore
+                          ? 'bg-[#14532D] hover:bg-[#0C3B21] text-white cursor-pointer'
+                          : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+                      }`}
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Add Product</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Read-Only Notice if not manager's store */}
+                {!isManagerForStore && (
+                  <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-xs flex items-center gap-2.5">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
+                    <span>
+                      <strong>Read-Only Mode:</strong> You are viewing {currentStore.name}. To add or edit products, switch store to your assigned location ({profile?.store?.name || 'Assigned Store'}).
+                    </span>
+                  </div>
+                )}
+
+                {/* Search Bar & Filter Row */}
+                <div className="flex items-center gap-3 pt-2 border-t border-[#14532D]/10">
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 text-[#43543F] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Search by product name, barcode, or category..."
+                      value={productSearch}
+                      onChange={(e) => setProductSearch(e.target.value)}
+                      className="w-full pl-10 pr-9 py-2.5 bg-[#F6F2E7]/60 border border-[#14532D]/15 rounded-xl text-xs font-medium text-[#16130E] placeholder:text-[#43543F]/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#14532D]/30 transition"
+                    />
+                    {productSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setProductSearch('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[#43543F] hover:text-[#16130E]"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={fetchStoreProducts}
+                    disabled={loadingProducts}
+                    title="Refresh products"
+                    className="p-2.5 bg-[#F6F2E7] hover:bg-[#E8F1E4] text-[#14532D] rounded-xl border border-[#14532D]/15 transition shrink-0 cursor-pointer"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${loadingProducts ? 'animate-spin' : ''}`} />
+                  </button>
                 </div>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-[#14532D]/10 text-[#43543F] uppercase font-bold text-[10px] tracking-wider">
-                      <th className="py-3 px-3">Product Name</th>
-                      <th className="py-3 px-3">Category</th>
-                      <th className="py-3 px-3">Price (INR)</th>
-                      <th className="py-3 px-3">Stock Units</th>
-                      <th className="py-3 px-3 text-right">Inventory State</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#14532D]/5">
-                    {summary?.low_stock_items?.map((p) => (
-                      <tr key={p.id} className="hover:bg-[#F6F2E7]/40 transition">
-                        <td className="py-3 px-3 font-semibold text-[#16130E]">{p.name}</td>
-                        <td className="py-3 px-3 text-[#43543F]">{p.category}</td>
-                        <td className="py-3 px-3 font-bold text-[#14532D]">₹{p.price}</td>
-                        <td className="py-3 px-3 font-mono font-medium">{p.stock}</td>
-                        <td className="py-3 px-3 text-right">
-                          {p.stock === 0 ? (
-                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-neutral-200 text-neutral-600">
-                              Out of Stock
-                            </span>
-                          ) : (
-                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
-                              Low Stock ({p.stock})
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              {/* Products Table Card */}
+              <div className="bg-white p-6 rounded-2xl border border-[#14532D]/10 shadow-xs space-y-4">
+                {inlineError && (
+                  <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                      <span>{inlineError}</span>
+                    </div>
+                    <button type="button" onClick={() => setInlineError('')} className="text-red-700 hover:text-red-900">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
+                {loadingProducts ? (
+                  <div className="py-12 flex flex-col items-center justify-center text-center space-y-3">
+                    <Loader2 className="w-7 h-7 text-[#14532D] animate-spin" />
+                    <p className="text-xs text-[#43543F]">Loading catalogue items...</p>
+                  </div>
+                ) : filteredProducts.length === 0 ? (
+                  <div className="py-12 text-center space-y-3">
+                    <div className="w-12 h-12 rounded-2xl bg-[#E8F1E4] text-[#14532D] flex items-center justify-center mx-auto">
+                      <Package className="w-6 h-6" />
+                    </div>
+                    <h4 className="font-extrabold text-sm text-[#16130E]">No Products Found</h4>
+                    <p className="text-xs text-[#43543F] max-w-sm mx-auto">
+                      {productSearch ? `No products match "${productSearch}". Try adjusting your search query.` : 'There are no products in this store catalogue yet.'}
+                    </p>
+                    {isManagerForStore && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAddProductModal(true)}
+                        className="px-4 py-2 bg-[#14532D] hover:bg-[#0C3B21] text-white text-xs font-bold rounded-xl shadow-xs transition inline-flex items-center gap-2 cursor-pointer"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Add First Product</span>
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-[#14532D]/10 text-[#43543F] uppercase font-bold text-[10px] tracking-wider">
+                          <th className="py-3 px-3">Product</th>
+                          <th className="py-3 px-3">Barcode</th>
+                          <th className="py-3 px-3">Category</th>
+                          <th className="py-3 px-3">Price (INR)</th>
+                          <th className="py-3 px-3">Stock Units</th>
+                          <th className="py-3 px-3 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#14532D]/5">
+                        {filteredProducts.map((p) => {
+                          const isEditing = editingProductId === p.id;
+                          return (
+                            <tr key={p.id} className="hover:bg-[#F6F2E7]/40 transition">
+                              {/* Product Name */}
+                              <td className="py-3 px-3">
+                                <span className="font-bold text-[#16130E] block">{p.name}</span>
+                              </td>
+
+                              {/* Barcode */}
+                              <td className="py-3 px-3 font-mono text-[11px] text-[#43543F]">
+                                <span className="px-2 py-0.5 bg-[#F6F2E7] border border-[#14532D]/10 rounded-md">
+                                  {p.barcode}
+                                </span>
+                              </td>
+
+                              {/* Category */}
+                              <td className="py-3 px-3 text-[#43543F]">
+                                <span className="px-2 py-0.5 bg-neutral-100 rounded-md font-medium text-[11px]">
+                                  {p.category}
+                                </span>
+                              </td>
+
+                              {/* Price */}
+                              <td className="py-3 px-3">
+                                {isEditing ? (
+                                  <div className="flex items-center gap-1">
+                                    <span className="font-bold text-[#14532D]">₹</span>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="1"
+                                      value={inlinePrice}
+                                      onChange={(e) => setInlinePrice(e.target.value)}
+                                      className="w-20 px-2 py-1 bg-white border border-[#14532D]/30 rounded-lg text-xs font-bold text-[#14532D] focus:outline-none focus:ring-1 focus:ring-[#14532D]"
+                                      autoFocus
+                                    />
+                                  </div>
+                                ) : (
+                                  <span className="font-bold text-[#14532D] text-sm">₹{p.price}</span>
+                                )}
+                              </td>
+
+                              {/* Stock */}
+                              <td className="py-3 px-3">
+                                {isEditing ? (
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="1"
+                                    value={inlineStock}
+                                    onChange={(e) => setInlineStock(e.target.value)}
+                                    className="w-20 px-2 py-1 bg-white border border-[#14532D]/30 rounded-lg text-xs font-mono font-medium focus:outline-none focus:ring-1 focus:ring-[#14532D]"
+                                  />
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono font-medium">{p.stock}</span>
+                                    {p.stock === 0 ? (
+                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-neutral-200 text-neutral-600">
+                                        Out of Stock
+                                      </span>
+                                    ) : p.stock <= 5 ? (
+                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
+                                        Low ({p.stock})
+                                      </span>
+                                    ) : (
+                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                        In Stock
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </td>
+
+                              {/* Actions */}
+                              <td className="py-3 px-3 text-right">
+                                {isEditing ? (
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSaveInline(p)}
+                                      disabled={savingInline}
+                                      className="px-2.5 py-1 bg-[#14532D] hover:bg-[#0C3B21] text-white rounded-lg font-bold text-[11px] flex items-center gap-1 transition shadow-xs disabled:opacity-60 cursor-pointer"
+                                    >
+                                      {savingInline ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                                      <span>Save</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={cancelInlineEdit}
+                                      disabled={savingInline}
+                                      className="px-2.5 py-1 bg-neutral-100 hover:bg-neutral-200 text-[#16130E] rounded-lg font-semibold text-[11px] transition cursor-pointer"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                ) : (
+                                  isManagerForStore && (
+                                    <button
+                                      type="button"
+                                      onClick={() => startInlineEdit(p)}
+                                      className="px-2.5 py-1 text-xs font-semibold text-[#14532D] hover:bg-[#E8F1E4] rounded-lg transition inline-flex items-center gap-1 cursor-pointer"
+                                      title="Quick edit price/stock inline"
+                                    >
+                                      <Edit2 className="w-3 h-3" />
+                                      <span>Edit</span>
+                                    </button>
+                                  )
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -872,6 +1188,15 @@ export default function ManagerDashboard() {
           </div>
         </div>
       )}
+
+      {/* 4. MANAGER ADD PRODUCT MODAL (Part 1 - Feature A) */}
+      <ManagerAddProductModal
+        isOpen={showAddProductModal}
+        onClose={() => setShowAddProductModal(false)}
+        store={currentStore}
+        existingCategories={existingCategories}
+        onProductSaved={handleProductSaved}
+      />
     </div>
   );
 }

@@ -30,6 +30,27 @@ class ProductResponse(BaseModel):
     stock: int
     in_stock: bool
 
+class ProductCreateRequest(BaseModel):
+    barcode: str = Field(..., min_length=1, description="Product barcode (must be unique within store)")
+    name: str = Field(..., min_length=1, description="Generic product name")
+    category: str = Field(..., min_length=1, description="Category name")
+    price: int = Field(..., ge=0, description="Price in whole rupees (INR)")
+    stock: int = Field(..., ge=0, description="Stock units available")
+
+class ProductUpdateRequest(BaseModel):
+    id: Optional[str] = None
+    barcode: Optional[str] = None
+    name: Optional[str] = None
+    category: Optional[str] = None
+    price: Optional[int] = Field(None, ge=0)
+    stock: Optional[int] = Field(None, ge=0)
+
+class BarcodeLookupResponse(BaseModel):
+    status: str # "EXISTS_CURRENT_STORE" | "EXISTS_OTHER_STORE" | "NEW_PRODUCT"
+    barcode: str
+    product: Optional[Dict[str, Any]] = None
+    other_product: Optional[Dict[str, Any]] = None
+
 # Scan Models
 class ScanRequest(BaseModel):
     store_id: str

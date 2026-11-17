@@ -95,48 +95,60 @@ def seed_database() -> Dict[str, Any]:
         rest_url = f"{SUPABASE_URL}/rest/v1"
         rest_headers = get_rest_headers()
 
-        print("--- [1/6] Cleaning existing orders and demo catalog ---")
+        print("--- [1/6] Cleaning existing orders and resetting demo state ---")
         client.delete(f"{rest_url}/exit_verifications?id=not.is.null", headers=rest_headers)
         client.delete(f"{rest_url}/order_items?id=not.is.null", headers=rest_headers)
         client.delete(f"{rest_url}/orders?id=not.is.null", headers=rest_headers)
-        client.delete(f"{rest_url}/products?id=not.is.null", headers=rest_headers)
-        client.delete(f"{rest_url}/profiles?id=not.is.null", headers=rest_headers)
-        client.delete(f"{rest_url}/stores?id=not.is.null", headers=rest_headers)
-        client.delete(f"{rest_url}/retailers?id=not.is.null", headers=rest_headers)
 
         print("--- [2/6] Seeding Retailer and Stores ---")
-        ret_res = client.post(
-            f"{rest_url}/retailers", 
-            json={"name": "SmartScan Demo Retail"}, 
-            headers=rest_headers
-        )
-        check_response(ret_res, "retailers insertion")
-        retailer_id = ret_res.json()[0]["id"]
+        ret_res = client.get(f"{rest_url}/retailers?limit=1", headers=rest_headers)
+        if ret_res.status_code == 200 and ret_res.json():
+            retailer_id = ret_res.json()[0]["id"]
+        else:
+            ret_create = client.post(
+                f"{rest_url}/retailers", 
+                json={"name": "SmartScan Demo Retail"}, 
+                headers=rest_headers
+            )
+            check_response(ret_create, "retailers insertion")
+            retailer_id = ret_create.json()[0]["id"]
 
         stores_data = [
             {"retailer_id": retailer_id, "name": "FreshMart", "area": "Rajpur Road, Dehradun", "code": "FM"},
             {"retailer_id": retailer_id, "name": "StyleHub", "area": "Rajpur Road, Dehradun", "code": "SH"},
             {"retailer_id": retailer_id, "name": "DailyNeeds", "area": "Subhash Nagar, Dehradun", "code": "DN"},
         ]
-        stores_res = client.post(f"{rest_url}/stores", json=stores_data, headers=rest_headers)
-        check_response(stores_res, "stores insertion")
-        stores_map = {s["code"]: s["id"] for s in stores_res.json()}
+        stores_res = client.get(f"{rest_url}/stores", headers=rest_headers)
+        stores_map = {}
+        if stores_res.status_code == 200 and stores_res.json():
+            for s in stores_res.json():
+                stores_map[s["code"]] = s["id"]
+        
+        # If any store missing, insert it
+        missing_stores = [s for s in stores_data if s["code"] not in stores_map]
+        if missing_stores:
+            s_ins = client.post(f"{rest_url}/stores", json=missing_stores, headers=rest_headers)
+            check_response(s_ins, "stores insertion")
+            for s in s_ins.json():
+                stores_map[s["code"]] = s["id"]
+
         fm_id = stores_map["FM"]
         sh_id = stores_map["SH"]
         dn_id = stores_map["DN"]
 
         print("--- [3/6] Provisioning Demo Accounts & Profiles ---")
-        # 4 demo accounts (docs/11_AUTH.md)
         demo_cust_id = create_or_get_user(client, "demo@smartscan.app", "Demo Customer")
         anubhav_cust_id = create_or_get_user(client, "anubhav@smartscan.app", "Anubhav Kumar")
         staff_id = create_or_get_user(client, "staff@smartscan.app", "FreshMart Exit Staff")
         manager_id = create_or_get_user(client, "manager@smartscan.app", "FreshMart Store Manager")
+        manager_sh_id = create_or_get_user(client, "manager-sh@smartscan.app", "StyleHub Store Manager")
 
         profiles = [
             {"id": demo_cust_id, "role": "customer", "store_id": None, "display_name": "Demo Customer"},
             {"id": anubhav_cust_id, "role": "customer", "store_id": None, "display_name": "Anubhav Kumar"},
             {"id": staff_id, "role": "exit_staff", "store_id": fm_id, "display_name": "FreshMart Exit Staff"},
             {"id": manager_id, "role": "manager", "store_id": fm_id, "display_name": "FreshMart Store Manager"},
+            {"id": manager_sh_id, "role": "manager", "store_id": sh_id, "display_name": "StyleHub Store Manager"},
         ]
         prof_res = client.post(f"{rest_url}/profiles", json=profiles, headers=get_rest_headers(upsert=True))
         check_response(prof_res, "profiles upsert")
@@ -165,8 +177,16 @@ def seed_database() -> Dict[str, Any]:
             {"store_id": dn_id, "name": "Dettol Original Soap 75g", "barcode": "8901396311029", "category": "Care", "price": 38, "stock": 50},
             {"store_id": dn_id, "name": "Good Day Butter Cookies", "barcode": "8901063012213", "category": "Snacks", "price": 30, "stock": 40},
         ]
-        prod_res = client.post(f"{rest_url}/products", json=products_payload, headers=rest_headers)
-        check_response(prod_res, "products insertion")
+        
+        # Reset seed products without deleting manager-added custom products (R8 compliant)
+        upsert_headers = get_rest_headers(upsert=True)
+        upsert_headers["Prefer"] = "resolution=merge-duplicates,return=representation"
+        prod_res = client.post(
+            f"{rest_url}/products?on_conflict=store_id,barcode",
+            json=products_payload,
+            headers=upsert_headers
+        )
+        check_response(prod_res, "products upsert")
         products_list = prod_res.json()
         fm_products = {p["name"]: p for p in products_list if p["store_id"] == fm_id}
 
