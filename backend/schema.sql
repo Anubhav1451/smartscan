@@ -97,6 +97,17 @@ CREATE TABLE IF NOT EXISTS exit_verifications (
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
+-- Unknown Scans (logged when customer scans an unlisted barcode)
+CREATE TABLE IF NOT EXISTS unknown_scans (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    store_id UUID NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+    barcode TEXT NOT NULL,
+    count INTEGER NOT NULL DEFAULT 1 CHECK (count > 0),
+    last_scanned_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    CONSTRAINT uq_unknown_store_barcode UNIQUE (store_id, barcode)
+);
+
 -- 4. HELPER FUNCTIONS
 CREATE OR REPLACE FUNCTION generate_next_bill_no()
 RETURNS TEXT AS $$
@@ -114,6 +125,7 @@ CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders(customer_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_exit_verifications_order ON exit_verifications(order_id);
+CREATE INDEX IF NOT EXISTS idx_unknown_scans_store ON unknown_scans(store_id);
 
 -- 6. ROW LEVEL SECURITY (RLS)
 ALTER TABLE retailers ENABLE ROW LEVEL SECURITY;
@@ -123,6 +135,7 @@ ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE exit_verifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE unknown_scans ENABLE ROW LEVEL SECURITY;
 
 -- Retailers & Stores (publicly readable for store selection)
 CREATE POLICY "Public can view retailers" ON retailers

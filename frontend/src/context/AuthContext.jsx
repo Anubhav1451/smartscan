@@ -91,6 +91,10 @@ export function AuthProvider({ children }) {
     return signIn('manager@smartscan.app', DEMO_PASSWORD);
   };
 
+  const signInStyleHubManagerDemo = async () => {
+    return signIn('manager-sh@smartscan.app', DEMO_PASSWORD);
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
     setSession(null);
@@ -109,6 +113,7 @@ export function AuthProvider({ children }) {
         signInDemo,
         signInStaffDemo,
         signInManagerDemo,
+        signInStyleHubManagerDemo,
         signOut,
         refreshProfile: () => user && loadProfile(user),
       }}

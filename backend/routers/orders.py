@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, status, Header, Depends
 from core.db import get_supabase
 from core.auth import get_current_user, UserProfile, require_staff_or_manager
+from core.stock import decrement_order_stock_atomic
+from core.rate_limit import check_checkout_rate_limit, check_pay_rate_limit
 from models.schemas import (
     CheckoutRequest,
     CheckoutResponse,
@@ -21,7 +23,11 @@ router = APIRouter(tags=["Orders & Checkout"])
 IDEMPOTENCY_CACHE: Dict[str, Dict[str, Any]] = {}
 
 @router.post("/checkout", response_model=CheckoutResponse)
-def checkout(req: CheckoutRequest, user: UserProfile = Depends(get_current_user)):
+def checkout(
+    req: CheckoutRequest, 
+    user: UserProfile = Depends(get_current_user),
+    _rl: None = Depends(check_checkout_rate_limit)
+):
     """
     Validates items and stock, computes total server-side,
     creates order + order_items in PAYMENT_PENDING status.
@@ -176,26 +182,8 @@ def process_mock_payment(order_id: str, idempotency_key: Optional[str] = None) -
             detail={"error": "No items found for this order", "code": "NO_ITEMS"}
         )
     
-    # Re-verify stock before final payment
-    for item in order_items:
-        prod = item.get("products")
-        if not prod or prod.get("stock", 0) < item["qty"]:
-            available = prod.get("stock", 0) if prod else 0
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={
-                    "error": f"Item '{item['name_snapshot']}' is out of stock (available: {available}, requested: {item['qty']})",
-                    "code": "OUT_OF_STOCK"
-                }
-            )
-    
-    # Decrement stock for each item atomically
-    for item in order_items:
-        curr_stock = item["products"]["stock"]
-        new_stock = curr_stock - item["qty"]
-        if new_stock < 0:
-            new_stock = 0
-        sb.table("products").update({"stock": new_stock}).eq("id", item["product_id"]).execute()
+    # Decrement stock atomically with race-safety & conditional update (Part 5 Hardening)
+    decrement_order_stock_atomic(order_items)
     
     # Generate canonical bill number SS-#####
     try:
@@ -246,7 +234,8 @@ def process_mock_payment(order_id: str, idempotency_key: Optional[str] = None) -
 def mock_pay_prompt_endpoint(
     order_id: str,
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
-    user: UserProfile = Depends(get_current_user)
+    user: UserProfile = Depends(get_current_user),
+    _rl: None = Depends(check_pay_rate_limit)
 ):
     """
     Process mock payment with required Idempotency-Key header.
@@ -259,7 +248,8 @@ def mock_pay_docs_endpoint(
     order_id: str,
     req: MockPayRequest = MockPayRequest(),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
-    user: UserProfile = Depends(get_current_user)
+    user: UserProfile = Depends(get_current_user),
+    _rl: None = Depends(check_pay_rate_limit)
 ):
     """
     Process mock payment. Matches docs/05_API.md requirement.
@@ -325,15 +315,11 @@ def confirm_cash_core(order_id: str, staff: UserProfile) -> dict:
             detail={"error": f"Order status is {order['status']}, expected CASH_PENDING", "code": "INVALID_STATUS"}
         )
     
-    # Decrement stock
+    # Decrement stock atomically (Part 5 Hardening)
     items_res = sb.table("order_items").select(
-        "id, product_id, qty, products(stock)"
+        "id, product_id, qty, name_snapshot"
     ).eq("order_id", order_id).execute()
-    
-    for it in (items_res.data or []):
-        curr_stock = it.get("products", {}).get("stock", 0)
-        new_stock = max(0, curr_stock - it["qty"])
-        sb.table("products").update({"stock": new_stock}).eq("id", it["product_id"]).execute()
+    decrement_order_stock_atomic(items_res.data or [])
     
     # Generate bill_no and qr_token
     try:

@@ -1,6 +1,7 @@
 from typing import Optional
 from fastapi import APIRouter, HTTPException, status, Query
 from core.db import get_supabase
+from core.unknown_scans import record_unknown_scan
 from models.schemas import ScanRequest, ProductResponse
 
 router = APIRouter(tags=["Scan & Products"])
@@ -12,6 +13,13 @@ def lookup_product_by_barcode(store_id: str, barcode: str) -> dict:
     ).eq("store_id", store_id).eq("barcode", barcode).execute()
     
     if not res.data or len(res.data) == 0:
+        # Part 2: Feature C — Log unknown barcode to store's unknown scan queue
+        try:
+            record_unknown_scan(store_id, barcode)
+        except Exception as e:
+            # Non-blocking logging failure
+            pass
+
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"error": "Product not found in this store", "code": "PRODUCT_NOT_FOUND"}

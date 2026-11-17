@@ -30,6 +30,59 @@ class ProductResponse(BaseModel):
     stock: int
     in_stock: bool
 
+class ProductCreateRequest(BaseModel):
+    barcode: str = Field(..., min_length=1, description="Product barcode (must be unique within store)")
+    name: str = Field(..., min_length=1, description="Generic product name")
+    category: str = Field(..., min_length=1, description="Category name")
+    price: int = Field(..., ge=0, description="Price in whole rupees (INR)")
+    stock: int = Field(..., ge=0, description="Stock units available")
+
+class ProductUpdateRequest(BaseModel):
+    id: Optional[str] = None
+    barcode: Optional[str] = None
+    name: Optional[str] = None
+    category: Optional[str] = None
+    price: Optional[int] = Field(None, ge=0)
+    stock: Optional[int] = Field(None, ge=0)
+
+class BarcodeLookupResponse(BaseModel):
+    status: str # "EXISTS_CURRENT_STORE" | "EXISTS_OTHER_STORE" | "NEW_PRODUCT"
+    barcode: str
+    product: Optional[Dict[str, Any]] = None
+    other_product: Optional[Dict[str, Any]] = None
+
+class UnknownScanResponse(BaseModel):
+    id: str
+    store_id: str
+    barcode: str
+    count: int
+    last_scanned_at: str
+    created_at: str
+
+# Bulk Import Models (Part 3 - Feature B)
+class ImportRowError(BaseModel):
+    row: int
+    barcode: Optional[str] = None
+    name: Optional[str] = None
+    reason: str
+
+class ImportPreviewResponse(BaseModel):
+    total_rows: int
+    valid_count: int
+    to_add_count: int
+    to_update_count: int
+    to_fail_count: int
+    to_add: List[Dict[str, Any]]
+    to_update: List[Dict[str, Any]]
+    failed: List[ImportRowError]
+
+class ImportExecuteResponse(BaseModel):
+    status: str
+    added_count: int
+    updated_count: int
+    failed_count: int
+    errors: List[ImportRowError] = []
+
 # Scan Models
 class ScanRequest(BaseModel):
     store_id: str

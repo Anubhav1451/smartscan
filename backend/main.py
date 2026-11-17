@@ -1,13 +1,42 @@
-from fastapi import FastAPI
+import logging
+from fastapi import FastAPI, Request, HTTPException, status
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from core.config import settings
 from routers import admin, stores, scan, orders, bills, staff, dashboard
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
     description="SmartScan API — Multi-Retailer Scan-and-Go Checkout System"
 )
+
+# Part 5: Error Hygiene — Never leak stack traces, SQL or file paths to API clients
+@app.exception_handler(HTTPException)
+async def custom_http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail} if isinstance(exc.detail, (dict, list)) else {"detail": {"error": str(exc.detail), "code": "HTTP_ERROR"}}
+    )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    error_msg = "; ".join([f"{'.'.join(str(loc) for loc in err['loc'])}: {err['msg']}" for err in exc.errors()])
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": {"error": error_msg, "code": "VALIDATION_ERROR"}}
+    )
+
+@app.exception_handler(Exception)
+async def global_unhandled_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled error processing {request.method} {request.url.path}: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": {"error": "An unexpected server error occurred. Please try again.", "code": "INTERNAL_SERVER_ERROR"}}
+    )
 
 # CORS Middleware configuration
 app.add_middleware(
