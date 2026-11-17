@@ -6,6 +6,7 @@ from fastapi.responses import Response
 from core.db import get_supabase
 from core.auth import require_manager, UserProfile
 from core.unknown_scans import get_unknown_scans, delete_unknown_scan
+from core.rate_limit import check_products_rate_limit, check_import_rate_limit
 from models.schemas import (
     StoreResponse, 
     ProductResponse, 
@@ -118,7 +119,8 @@ def lookup_barcode_for_store(
 def add_store_product(
     store_id: str,
     req: ProductCreateRequest,
-    user: UserProfile = Depends(require_manager)
+    user: UserProfile = Depends(require_manager),
+    _rl: None = Depends(check_products_rate_limit)
 ):
     """
     Add a single product to the store's catalogue (Part 1 / Feature A).
@@ -478,7 +480,8 @@ def download_import_template(
 async def preview_product_import(
     store_id: str,
     file: UploadFile = File(...),
-    user: UserProfile = Depends(require_manager)
+    user: UserProfile = Depends(require_manager),
+    _rl: None = Depends(check_import_rate_limit)
 ):
     """
     Dry run preview for bulk CSV import. Nothing is written to the database.
@@ -512,7 +515,8 @@ async def preview_product_import(
 async def execute_product_import(
     store_id: str,
     file: UploadFile = File(...),
-    user: UserProfile = Depends(require_manager)
+    user: UserProfile = Depends(require_manager),
+    _rl: None = Depends(check_import_rate_limit)
 ):
     """
     Execute bulk CSV import.

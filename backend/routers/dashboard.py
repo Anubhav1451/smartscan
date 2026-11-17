@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, status, Depends, Query
 
 from core.db import get_supabase
 from core.auth import require_manager, require_staff_or_manager, UserProfile
+from core.rate_limit import check_reset_rate_limit
 from models.schemas import DashboardSummaryResponse, ImpactMetrics, ResetDemoResponse
 import seed
 
@@ -288,7 +289,10 @@ def get_low_stock(
     return summary["low_stock_items"]
 
 @router.post("/reset-demo", response_model=ResetDemoResponse)
-def reset_demo_manager(user: UserProfile = Depends(require_manager)):
+def reset_demo_manager(
+    user: UserProfile = Depends(require_manager),
+    _rl: None = Depends(check_reset_rate_limit)
+):
     """
     In-app Reset Demo Data for store managers.
     Restores seed state, 3 stores, 16 products, and 40 orders server-side.
