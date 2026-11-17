@@ -51,6 +51,14 @@ class BarcodeLookupResponse(BaseModel):
     product: Optional[Dict[str, Any]] = None
     other_product: Optional[Dict[str, Any]] = None
 
+class UnknownScanResponse(BaseModel):
+    id: str
+    store_id: str
+    barcode: str
+    count: int
+    last_scanned_at: str
+    created_at: str
+
 # Scan Models
 class ScanRequest(BaseModel):
     store_id: str

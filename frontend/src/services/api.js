@@ -117,6 +117,17 @@ export const api = {
     });
   },
 
+  // Manager Unknown Scans Queue (Part 2 - Feature C)
+  async getStoreUnknownScans(storeId) {
+    return request(`/stores/${storeId}/unknown-scans`);
+  },
+
+  async deleteStoreUnknownScan(storeId, scanId) {
+    return request(`/stores/${storeId}/unknown-scans/${scanId}`, {
+      method: 'DELETE',
+    });
+  },
+
   // Exit Staff
   async getStaffCashPending() {
     return request('/staff/cash-pending');

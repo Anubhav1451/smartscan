@@ -24,7 +24,8 @@ import {
   Edit2,
   Check,
   X,
-  Tag
+  Tag,
+  ScanLine
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
@@ -193,10 +194,40 @@ export default function ManagerDashboard() {
         return [{ ...saved, in_stock: saved.stock > 0 }, ...prev];
       }
     });
+    setUnknownScans(prev => prev.filter(s => s.barcode !== saved.barcode));
     fetchDashboardData();
   };
 
   const isManagerForStore = profile?.role === 'manager' && (!profile?.store_id || profile?.store_id === selectedStoreId);
+
+  // Unknown Scans Queue (Part 2 - Feature C)
+  const [unknownScans, setUnknownScans] = useState([]);
+  const [loadingUnknownScans, setLoadingUnknownScans] = useState(false);
+  const [selectedUnknownBarcode, setSelectedUnknownBarcode] = useState(null);
+
+  const fetchUnknownScans = async () => {
+    if (!selectedStoreId || !isManagerForStore) return;
+    try {
+      setLoadingUnknownScans(true);
+      const data = await api.getStoreUnknownScans(selectedStoreId);
+      setUnknownScans(data || []);
+    } catch (err) {
+      console.warn('Failed to load unknown scans:', err);
+    } finally {
+      setLoadingUnknownScans(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'products' && isManagerForStore) {
+      fetchUnknownScans();
+    }
+  }, [selectedStoreId, activeTab, isManagerForStore]);
+
+  const handleAddUnknownProduct = (barcode) => {
+    setSelectedUnknownBarcode(barcode);
+    setShowAddProductModal(true);
+  };
   const existingCategories = Array.from(new Set(storeProducts.map(p => p.category).filter(Boolean)));
   const filteredProducts = storeProducts.filter(p => {
     if (!productSearch.trim()) return true;
@@ -207,6 +238,19 @@ export default function ManagerDashboard() {
       (p.barcode || '').toLowerCase().includes(term)
     );
   });
+
+  const formatTimeAgo = (isoString) => {
+    if (!isoString) return 'recently';
+    const diff = Date.now() - new Date(isoString).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins === 1) return '1 min ago';
+    if (mins < 60) return `${mins} mins ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours === 1) return '1 hr ago';
+    if (hours < 24) return `${hours} hrs ago`;
+    return `${Math.floor(hours / 24)}d ago`;
+  };
 
   const currentStore = stores.find(s => s.id === selectedStoreId) || { name: 'FreshMart', code: 'FM' };
 
@@ -871,6 +915,67 @@ export default function ManagerDashboard() {
                 </div>
               </div>
 
+              {/* Unknown Scans Queue (Part 2 - Feature C) */}
+              {isManagerForStore && unknownScans.length > 0 && (
+                <div className="bg-amber-50/70 border border-amber-200/90 rounded-2xl p-5 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 bg-amber-100 text-amber-900 rounded-xl">
+                        <ScanLine className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-extrabold text-sm text-amber-950">Scanned but not in catalogue</h4>
+                          <span className="px-2 py-0.5 bg-amber-200/80 text-amber-900 font-bold text-[10px] rounded-full">
+                            {unknownScans.length} {unknownScans.length === 1 ? 'item' : 'items'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-amber-800/80 mt-0.5">
+                          Shoppers scanned these barcodes in {currentStore.name}. Tap to add them directly to your catalogue.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={fetchUnknownScans}
+                      disabled={loadingUnknownScans}
+                      title="Refresh unknown scans"
+                      className="p-2 bg-amber-100/70 hover:bg-amber-100 text-amber-900 rounded-xl transition cursor-pointer"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${loadingUnknownScans ? 'animate-spin' : ''}`} />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+                    {unknownScans.map((item) => (
+                      <div
+                        key={item.id}
+                        className="bg-white p-3.5 rounded-xl border border-amber-200/70 flex items-center justify-between gap-3 shadow-2xs hover:border-amber-400 transition"
+                      >
+                        <div className="truncate">
+                          <span className="font-mono font-bold text-xs text-[#16130E] block tracking-wide">
+                            {item.barcode}
+                          </span>
+                          <span className="text-[10px] text-[#43543F] flex items-center gap-1.5 mt-0.5">
+                            <span className="font-semibold text-amber-800">Scanned {item.count}×</span>
+                            <span>·</span>
+                            <span>{formatTimeAgo(item.last_scanned_at)}</span>
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleAddUnknownProduct(item.barcode)}
+                          className="px-3 py-1.5 bg-[#14532D] hover:bg-[#0C3B21] text-white text-xs font-bold rounded-lg shadow-2xs transition shrink-0 flex items-center gap-1 cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Add</span>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Products Table Card */}
               <div className="bg-white p-6 rounded-2xl border border-[#14532D]/10 shadow-xs space-y-4">
                 {inlineError && (
@@ -1189,13 +1294,17 @@ export default function ManagerDashboard() {
         </div>
       )}
 
-      {/* 4. MANAGER ADD PRODUCT MODAL (Part 1 - Feature A) */}
+      {/* 4. MANAGER ADD PRODUCT MODAL (Part 1 - Feature A, Part 2 - Feature C) */}
       <ManagerAddProductModal
         isOpen={showAddProductModal}
-        onClose={() => setShowAddProductModal(false)}
+        onClose={() => {
+          setShowAddProductModal(false);
+          setSelectedUnknownBarcode(null);
+        }}
         store={currentStore}
         existingCategories={existingCategories}
         onProductSaved={handleProductSaved}
+        initialBarcode={selectedUnknownBarcode}
       />
     </div>
   );

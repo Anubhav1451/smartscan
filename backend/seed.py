@@ -99,6 +99,11 @@ def seed_database() -> Dict[str, Any]:
         client.delete(f"{rest_url}/exit_verifications?id=not.is.null", headers=rest_headers)
         client.delete(f"{rest_url}/order_items?id=not.is.null", headers=rest_headers)
         client.delete(f"{rest_url}/orders?id=not.is.null", headers=rest_headers)
+        try:
+            from core.unknown_scans import clear_unknown_scans
+            clear_unknown_scans()
+        except Exception:
+            pass
 
         print("--- [2/6] Seeding Retailer and Stores ---")
         ret_res = client.get(f"{rest_url}/retailers?limit=1", headers=rest_headers)

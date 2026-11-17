@@ -2,12 +2,14 @@ from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, status, Query, Depends, Body
 from core.db import get_supabase
 from core.auth import require_manager, UserProfile
+from core.unknown_scans import get_unknown_scans, delete_unknown_scan
 from models.schemas import (
     StoreResponse, 
     ProductResponse, 
     ProductCreateRequest, 
     ProductUpdateRequest,
-    BarcodeLookupResponse
+    BarcodeLookupResponse,
+    UnknownScanResponse
 )
 
 router = APIRouter(prefix="/stores", tags=["Stores"])
@@ -254,3 +256,36 @@ def update_store_product(
             detail={"error": "Product id is required in request body for PATCH /stores/{store_id}/products", "code": "VALIDATION_ERROR"}
         )
     return _update_product_internal(store_id, req.id, req, user)
+
+@router.get("/{store_id}/unknown-scans", response_model=List[UnknownScanResponse])
+def get_store_unknown_scans(
+    store_id: str,
+    user: UserProfile = Depends(require_manager)
+):
+    """
+    Part 2: Feature C — List barcodes scanned by shoppers that are not in this store's catalogue.
+    Strictly manager only for their own store.
+    """
+    if str(user.store_id) != str(store_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "Access forbidden: you are not a manager of this store", "code": "FORBIDDEN"}
+        )
+    return get_unknown_scans(store_id)
+
+@router.delete("/{store_id}/unknown-scans/{scan_id}")
+def remove_store_unknown_scan(
+    store_id: str,
+    scan_id: str,
+    user: UserProfile = Depends(require_manager)
+):
+    """
+    Dismiss or delete an unknown scan entry.
+    """
+    if str(user.store_id) != str(store_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "Access forbidden: you are not a manager of this store", "code": "FORBIDDEN"}
+        )
+    success = delete_unknown_scan(store_id, scan_id)
+    return {"success": success}
