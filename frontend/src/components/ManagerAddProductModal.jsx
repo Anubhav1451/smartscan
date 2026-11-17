@@ -235,6 +235,23 @@ export default function ManagerAddProductModal({
     }
   };
 
+  // Generate store-internal barcode (Part 4)
+  const handleGenerateInternalBarcode = async () => {
+    try {
+      setSearching(true);
+      setError('');
+      const res = await api.getNextInternalBarcode(store.id);
+      if (res && res.barcode) {
+        handleBarcodeResolved(res.barcode);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch next barcode from backend:', err);
+      handleBarcodeResolved(`SS${Math.floor(10000 + Math.random() * 90000)}`);
+    } finally {
+      setSearching(false);
+    }
+  };
+
   // Save or update product form submission
   const handleSaveProduct = async (e) => {
     e.preventDefault();
@@ -404,6 +421,19 @@ export default function ManagerAddProductModal({
                     {searching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Look Up'}
                   </button>
                 </form>
+
+                <div className="pt-2 flex items-center justify-between border-t border-[#14532D]/10">
+                  <span className="text-[11px] text-[#43543F]">Item has no barcode of its own?</span>
+                  <button
+                    type="button"
+                    onClick={handleGenerateInternalBarcode}
+                    disabled={searching}
+                    className="text-xs font-bold text-[#14532D] hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>Generate Store Barcode (SS)</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </button>
+                </div>
               </div>
             </div>
           )}

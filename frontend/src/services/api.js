@@ -128,6 +128,11 @@ export const api = {
     });
   },
 
+  // Store Internal Barcode (Part 4)
+  async getNextInternalBarcode(storeId) {
+    return request(`/stores/${storeId}/next-internal-barcode`);
+  },
+
   // Bulk Product Import (Part 3 - Feature B)
   async downloadImportTemplate(storeId) {
     const { data: sessionData } = await supabase.auth.getSession();

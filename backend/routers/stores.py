@@ -568,3 +568,34 @@ async def execute_product_import(
         failed_count=validation["to_fail_count"],
         errors=validation["failed"]
     )
+
+# ==============================================================================
+# Catalogue Care: Internal Barcode Generator (Part 4)
+# ==============================================================================
+
+@router.get("/{store_id}/next-internal-barcode")
+def get_next_internal_barcode(
+    store_id: str,
+    user: UserProfile = Depends(require_manager)
+):
+    """
+    Generate next sequential store-internal barcode (prefix 'SS' + number, e.g. SS10001).
+    Manager only for their own store.
+    """
+    if str(user.store_id) != str(store_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "Access forbidden: you are not a manager of this store", "code": "FORBIDDEN"}
+        )
+    sb = get_supabase()
+    res = sb.table("products").select("barcode").eq("store_id", store_id).like("barcode", "SS%").execute()
+    existing = res.data or []
+    max_num = 10000
+    for row in existing:
+        b = row.get("barcode", "")
+        if b.startswith("SS"):
+            digits = b[2:]
+            if digits.isdigit():
+                max_num = max(max_num, int(digits))
+    next_barcode = f"SS{max_num + 1}"
+    return {"barcode": next_barcode}

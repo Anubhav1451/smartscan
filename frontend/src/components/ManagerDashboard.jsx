@@ -26,12 +26,14 @@ import {
   X,
   Tag,
   ScanLine,
-  Upload
+  Upload,
+  Printer
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import ManagerAddProductModal from './ManagerAddProductModal';
 import ManagerImportModal from './ManagerImportModal';
+import BarcodeStickerModal from './BarcodeStickerModal';
 
 export default function ManagerDashboard() {
   const { profile, signOut } = useAuth();
@@ -113,6 +115,7 @@ export default function ManagerDashboard() {
   const [productSearch, setProductSearch] = useState('');
   const [showAddProductModal, setShowAddProductModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [selectedStickerProduct, setSelectedStickerProduct] = useState(null);
   const [editingProductId, setEditingProductId] = useState(null);
   const [inlinePrice, setInlinePrice] = useState('');
   const [inlineStock, setInlineStock] = useState('');
@@ -1145,15 +1148,26 @@ export default function ManagerDashboard() {
                                   </div>
                                 ) : (
                                   isManagerForStore && (
-                                    <button
-                                      type="button"
-                                      onClick={() => startInlineEdit(p)}
-                                      className="px-2.5 py-1 text-xs font-semibold text-[#14532D] hover:bg-[#E8F1E4] rounded-lg transition inline-flex items-center gap-1 cursor-pointer"
-                                      title="Quick edit price/stock inline"
-                                    >
-                                      <Edit2 className="w-3 h-3" />
-                                      <span>Edit</span>
-                                    </button>
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => setSelectedStickerProduct(p)}
+                                        className="px-2.5 py-1 text-xs font-semibold text-[#43543F] hover:text-[#14532D] hover:bg-[#E8F1E4] rounded-lg transition inline-flex items-center gap-1 cursor-pointer"
+                                        title="Print barcode sticker"
+                                      >
+                                        <Printer className="w-3.5 h-3.5" />
+                                        <span>Sticker</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => startInlineEdit(p)}
+                                        className="px-2.5 py-1 text-xs font-semibold text-[#14532D] hover:bg-[#E8F1E4] rounded-lg transition inline-flex items-center gap-1 cursor-pointer"
+                                        title="Quick edit price/stock inline"
+                                      >
+                                        <Edit2 className="w-3 h-3" />
+                                        <span>Edit</span>
+                                      </button>
+                                    </div>
                                   )
                                 )}
                               </td>
@@ -1335,6 +1349,14 @@ export default function ManagerDashboard() {
           fetchDashboardData();
           fetchUnknownScans();
         }}
+      />
+
+      {/* 6. BARCODE STICKER PRINT MODAL (Part 4) */}
+      <BarcodeStickerModal
+        isOpen={!!selectedStickerProduct}
+        onClose={() => setSelectedStickerProduct(null)}
+        product={selectedStickerProduct}
+        store={currentStore}
       />
     </div>
   );
