@@ -309,5 +309,5 @@ def reset_demo_manager(
         logger.error(f"Manager reset failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Reset failed: {str(e)}"
+            detail="Demo reset failed. Please try again."
         )
