@@ -1,5 +1,8 @@
+import csv
+import io
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, HTTPException, status, Query, Depends, Body
+from fastapi import APIRouter, HTTPException, status, Query, Depends, Body, UploadFile, File
+from fastapi.responses import Response
 from core.db import get_supabase
 from core.auth import require_manager, UserProfile
 from core.unknown_scans import get_unknown_scans, delete_unknown_scan
@@ -9,7 +12,10 @@ from models.schemas import (
     ProductCreateRequest, 
     ProductUpdateRequest,
     BarcodeLookupResponse,
-    UnknownScanResponse
+    UnknownScanResponse,
+    ImportPreviewResponse,
+    ImportExecuteResponse,
+    ImportRowError
 )
 
 router = APIRouter(prefix="/stores", tags=["Stores"])
@@ -289,3 +295,276 @@ def remove_store_unknown_scan(
         )
     success = delete_unknown_scan(store_id, scan_id)
     return {"success": success}
+
+# ==============================================================================
+# Bulk Catalogue Import (Part 3 - Feature B)
+# ==============================================================================
+
+def _parse_csv_content(content_bytes: bytes):
+    try:
+        text = content_bytes.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = content_bytes.decode("latin-1")
+    
+    stream = io.StringIO(text)
+    reader = csv.DictReader(stream)
+    if not reader.fieldnames:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "Uploaded CSV file is empty or missing headers", "code": "EMPTY_CSV"}
+        )
+
+    # Check required headers
+    field_map = {f.strip().lower(): f for f in reader.fieldnames if f}
+    required_cols = {"barcode", "name", "category", "price", "stock"}
+    if not required_cols.issubset(set(field_map.keys())):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": f"Invalid CSV headers. Required exactly: barcode, name, category, price, stock. Found: {reader.fieldnames}",
+                "code": "INVALID_CSV_HEADERS"
+            }
+        )
+
+    rows = []
+    row_num = 1 # header is row 1
+    for raw_row in reader:
+        row_num += 1
+        clean_row = {}
+        for col in required_cols:
+            orig_key = field_map[col]
+            val = raw_row.get(orig_key, "")
+            clean_row[col] = val.strip() if val else ""
+        rows.append((row_num, clean_row))
+    return rows
+
+def _validate_import_rows(store_id: str, rows):
+    seen_barcodes = {}
+    to_add = []
+    to_update = []
+    failed = []
+    valid_candidates = []
+
+    for row_num, r in rows:
+        barcode = r.get("barcode", "").strip()
+        name = r.get("name", "").strip()
+        category = r.get("category", "").strip()
+        price_str = r.get("price", "").strip()
+        stock_str = r.get("stock", "").strip()
+
+        if not barcode:
+            failed.append(ImportRowError(row=row_num, barcode=barcode, name=name, reason="Missing barcode"))
+            continue
+
+        if not name:
+            failed.append(ImportRowError(row=row_num, barcode=barcode, name=name, reason="Missing product name"))
+            continue
+
+        if not category:
+            failed.append(ImportRowError(row=row_num, barcode=barcode, name=name, reason="Missing product category"))
+            continue
+
+        # Validate price
+        try:
+            price = int(price_str)
+            if price < 0:
+                failed.append(ImportRowError(row=row_num, barcode=barcode, name=name, reason="Price cannot be negative"))
+                continue
+        except (ValueError, TypeError):
+            failed.append(ImportRowError(row=row_num, barcode=barcode, name=name, reason=f"Price must be a valid whole number (INR), got '{price_str}'"))
+            continue
+
+        # Validate stock
+        try:
+            stock = int(stock_str)
+            if stock < 0:
+                failed.append(ImportRowError(row=row_num, barcode=barcode, name=name, reason="Stock cannot be negative"))
+                continue
+        except (ValueError, TypeError):
+            failed.append(ImportRowError(row=row_num, barcode=barcode, name=name, reason=f"Stock must be a valid whole number, got '{stock_str}'"))
+            continue
+
+        # Check duplicate barcode within upload file
+        if barcode in seen_barcodes:
+            first_seen_row = seen_barcodes[barcode]
+            failed.append(ImportRowError(row=row_num, barcode=barcode, name=name, reason=f"Duplicate barcode in upload file (first seen at row {first_seen_row})"))
+            continue
+
+        seen_barcodes[barcode] = row_num
+        valid_candidates.append({
+            "row_num": row_num,
+            "store_id": store_id,
+            "barcode": barcode,
+            "name": name,
+            "category": category,
+            "price": price,
+            "stock": stock
+        })
+
+    # Check database for existing barcodes in this store
+    if valid_candidates:
+        sb = get_supabase()
+        candidate_barcodes = [c["barcode"] for c in valid_candidates]
+        # Query in chunks of 500
+        existing_map = {}
+        chunk_size = 500
+        for i in range(0, len(candidate_barcodes), chunk_size):
+            chunk = candidate_barcodes[i:i+chunk_size]
+            res = sb.table("products").select("id, barcode, price, stock").eq("store_id", store_id).in_("barcode", chunk).execute()
+            for p in (res.data or []):
+                existing_map[p["barcode"]] = p
+
+        for c in valid_candidates:
+            if c["barcode"] in existing_map:
+                p = existing_map[c["barcode"]]
+                to_update.append({
+                    "row": c["row_num"],
+                    "id": p["id"],
+                    "barcode": c["barcode"],
+                    "name": c["name"],
+                    "category": c["category"],
+                    "new_price": c["price"],
+                    "old_price": p["price"],
+                    "new_stock": c["stock"],
+                    "old_stock": p["stock"]
+                })
+            else:
+                to_add.append({
+                    "row": c["row_num"],
+                    "barcode": c["barcode"],
+                    "name": c["name"],
+                    "category": c["category"],
+                    "price": c["price"],
+                    "stock": c["stock"]
+                })
+
+    return {
+        "total_rows": len(rows),
+        "valid_count": len(to_add) + len(to_update),
+        "to_add_count": len(to_add),
+        "to_update_count": len(to_update),
+        "to_fail_count": len(failed),
+        "to_add": to_add,
+        "to_update": to_update,
+        "failed": failed,
+        "valid_candidates": valid_candidates
+    }
+
+@router.get("/{store_id}/products/import-template")
+def download_import_template(
+    store_id: str,
+    user: UserProfile = Depends(require_manager)
+):
+    """
+    Download a sample CSV template for bulk product import.
+    Contains exactly: barcode,name,category,price,stock with one example row.
+    """
+    if str(user.store_id) != str(store_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "Access forbidden: you are not a manager of this store", "code": "FORBIDDEN"}
+        )
+    csv_content = (
+        "barcode,name,category,price,stock\n"
+        "8901234567890,Sample Product Name,General,199,25\n"
+    )
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="smartscan_products_template.csv"'}
+    )
+
+@router.post("/{store_id}/products/import-preview", response_model=ImportPreviewResponse)
+async def preview_product_import(
+    store_id: str,
+    file: UploadFile = File(...),
+    user: UserProfile = Depends(require_manager)
+):
+    """
+    Dry run preview for bulk CSV import. Nothing is written to the database.
+    Returns:
+    - rows to add
+    - rows that will update an existing product
+    - rows that failed validation with row numbers and exact reasons
+    """
+    if str(user.store_id) != str(store_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "Access forbidden: you are not a manager of this store", "code": "FORBIDDEN"}
+        )
+
+    content_bytes = await file.read()
+    rows = _parse_csv_content(content_bytes)
+    validation = _validate_import_rows(store_id, rows)
+
+    return ImportPreviewResponse(
+        total_rows=validation["total_rows"],
+        valid_count=validation["valid_count"],
+        to_add_count=validation["to_add_count"],
+        to_update_count=validation["to_update_count"],
+        to_fail_count=validation["to_fail_count"],
+        to_add=validation["to_add"],
+        to_update=validation["to_update"],
+        failed=validation["failed"]
+    )
+
+@router.post("/{store_id}/products/import", response_model=ImportExecuteResponse)
+async def execute_product_import(
+    store_id: str,
+    file: UploadFile = File(...),
+    user: UserProfile = Depends(require_manager)
+):
+    """
+    Execute bulk CSV import.
+    Upserts valid rows into the store's catalogue (never creates duplicates).
+    A 1,000-row file executes in well under 60 seconds via batch upsert.
+    """
+    if str(user.store_id) != str(store_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "Access forbidden: you are not a manager of this store", "code": "FORBIDDEN"}
+        )
+
+    content_bytes = await file.read()
+    rows = _parse_csv_content(content_bytes)
+    validation = _validate_import_rows(store_id, rows)
+
+    valid_candidates = validation["valid_candidates"]
+    if not valid_candidates:
+        return ImportExecuteResponse(
+            status="no_valid_rows",
+            added_count=0,
+            updated_count=0,
+            failed_count=validation["to_fail_count"],
+            errors=validation["failed"]
+        )
+
+    # Batch upsert valid candidates (on conflict store_id, barcode)
+    sb = get_supabase()
+    batch_size = 100
+    for i in range(0, len(valid_candidates), batch_size):
+        batch = [
+            {
+                "store_id": c["store_id"],
+                "barcode": c["barcode"],
+                "name": c["name"],
+                "category": c["category"],
+                "price": c["price"],
+                "stock": c["stock"]
+            }
+            for c in valid_candidates[i:i+batch_size]
+        ]
+        res = sb.table("products").upsert(batch, on_conflict="store_id,barcode").execute()
+        if not res.data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={"error": "Failed to upsert product batch", "code": "UPSERT_FAILED"}
+            )
+
+    return ImportExecuteResponse(
+        status="success",
+        added_count=validation["to_add_count"],
+        updated_count=validation["to_update_count"],
+        failed_count=validation["to_fail_count"],
+        errors=validation["failed"]
+    )

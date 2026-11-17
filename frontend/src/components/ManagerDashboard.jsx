@@ -25,11 +25,13 @@ import {
   Check,
   X,
   Tag,
-  ScanLine
+  ScanLine,
+  Upload
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import ManagerAddProductModal from './ManagerAddProductModal';
+import ManagerImportModal from './ManagerImportModal';
 
 export default function ManagerDashboard() {
   const { profile, signOut } = useAuth();
@@ -110,6 +112,7 @@ export default function ManagerDashboard() {
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [productSearch, setProductSearch] = useState('');
   const [showAddProductModal, setShowAddProductModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [editingProductId, setEditingProductId] = useState(null);
   const [inlinePrice, setInlinePrice] = useState('');
   const [inlineStock, setInlineStock] = useState('');
@@ -853,8 +856,23 @@ export default function ManagerDashboard() {
                     <p className="text-xs text-[#43543F] mt-0.5">Authoritative per-store inventory and pricing</p>
                   </div>
 
-                  {/* Actions: Add Product Button */}
-                  <div className="flex items-center gap-3">
+                  {/* Actions: Add Product & Import Buttons */}
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setShowImportModal(true)}
+                      disabled={!isManagerForStore}
+                      title={isManagerForStore ? "Bulk import products from CSV" : "Read-only: Switch to your assigned store to import products"}
+                      className={`px-3.5 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-xs transition border ${
+                        isManagerForStore
+                          ? 'bg-white hover:bg-[#E8F1E4] text-[#14532D] border-[#14532D]/20 cursor-pointer'
+                          : 'bg-neutral-100 text-neutral-400 border-neutral-200 cursor-not-allowed'
+                      }`}
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Import Products</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => setShowAddProductModal(true)}
@@ -1305,6 +1323,18 @@ export default function ManagerDashboard() {
         existingCategories={existingCategories}
         onProductSaved={handleProductSaved}
         initialBarcode={selectedUnknownBarcode}
+      />
+
+      {/* 5. MANAGER BULK IMPORT MODAL (Part 3 - Feature B) */}
+      <ManagerImportModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        store={currentStore}
+        onImportComplete={() => {
+          fetchStoreProducts();
+          fetchDashboardData();
+          fetchUnknownScans();
+        }}
       />
     </div>
   );

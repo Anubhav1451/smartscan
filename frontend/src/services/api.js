@@ -128,6 +128,65 @@ export const api = {
     });
   },
 
+  // Bulk Product Import (Part 3 - Feature B)
+  async downloadImportTemplate(storeId) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    const res = await fetch(`${API_BASE_URL}/stores/${storeId}/products/import-template`, {
+      headers: {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      }
+    });
+    if (!res.ok) throw new Error('Failed to download template');
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'smartscan_products_template.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  },
+
+  async previewImportProducts(storeId, file) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(`${API_BASE_URL}/stores/${storeId}/products/import-preview`, {
+      method: 'POST',
+      headers: {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data?.detail?.error || data?.detail || 'Import preview failed');
+    }
+    return data;
+  },
+
+  async executeImportProducts(storeId, file) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(`${API_BASE_URL}/stores/${storeId}/products/import`, {
+      method: 'POST',
+      headers: {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data?.detail?.error || data?.detail || 'Import execution failed');
+    }
+    return data;
+  },
+
   // Exit Staff
   async getStaffCashPending() {
     return request('/staff/cash-pending');

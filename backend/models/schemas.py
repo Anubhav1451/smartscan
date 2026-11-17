@@ -59,6 +59,30 @@ class UnknownScanResponse(BaseModel):
     last_scanned_at: str
     created_at: str
 
+# Bulk Import Models (Part 3 - Feature B)
+class ImportRowError(BaseModel):
+    row: int
+    barcode: Optional[str] = None
+    name: Optional[str] = None
+    reason: str
+
+class ImportPreviewResponse(BaseModel):
+    total_rows: int
+    valid_count: int
+    to_add_count: int
+    to_update_count: int
+    to_fail_count: int
+    to_add: List[Dict[str, Any]]
+    to_update: List[Dict[str, Any]]
+    failed: List[ImportRowError]
+
+class ImportExecuteResponse(BaseModel):
+    status: str
+    added_count: int
+    updated_count: int
+    failed_count: int
+    errors: List[ImportRowError] = []
+
 # Scan Models
 class ScanRequest(BaseModel):
     store_id: str
