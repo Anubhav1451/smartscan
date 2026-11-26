@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   ShoppingBag, 
   Home as HomeIcon, 
   FileText, 
   LogOut, 
-  AlertTriangle
+  AlertTriangle,
+  Search,
+  X
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
@@ -49,6 +51,8 @@ export default function HomeScreen({ onNavigate }) {
   
   const [stores, setStores] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedArea, setSelectedArea] = useState('all');
 
   useEffect(() => {
     let mounted = true;
@@ -80,10 +84,57 @@ export default function HomeScreen({ onNavigate }) {
 
   const displayName = profile?.display_name || 'Anubhav';
 
+  // Distinct localities extracted from all loaded stores
+  const distinctAreas = useMemo(() => {
+    const areaSet = new Set();
+    stores.forEach((s) => {
+      if (s.area) areaSet.add(s.area);
+    });
+    return Array.from(areaSet).sort((a, b) => a.localeCompare(b));
+  }, [stores]);
+
+  // Demo stores (FM, SH, DN) pinned first; network stores sorted alphabetically by name
+  const sortedAndFilteredStores = useMemo(() => {
+    const demoOrder = { FM: 1, SH: 2, DN: 3 };
+
+    // Sort baseline: demo stores pinned first in order FM, SH, DN; others alphabetically by name
+    const sorted = [...stores].sort((a, b) => {
+      const isDemoA = demoOrder[a.code] || 0;
+      const isDemoB = demoOrder[b.code] || 0;
+      if (isDemoA && isDemoB) return isDemoA - isDemoB;
+      if (isDemoA) return -1;
+      if (isDemoB) return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    const cleanQuery = searchQuery.trim().toLowerCase();
+
+    return sorted.filter((store) => {
+      // Area chip filter
+      const matchesArea = selectedArea === 'all' || store.area === selectedArea;
+
+      // Live search filter by store name OR area
+      const matchesQuery = !cleanQuery || 
+        store.name.toLowerCase().includes(cleanQuery) || 
+        store.area.toLowerCase().includes(cleanQuery);
+
+      return matchesArea && matchesQuery;
+    });
+  }, [stores, searchQuery, selectedArea]);
+
+  // Count metrics computed from filtered stores
+  const filteredAreasCount = useMemo(() => {
+    const set = new Set();
+    sortedAndFilteredStores.forEach((s) => {
+      if (s.area) set.add(s.area);
+    });
+    return set.size;
+  }, [sortedAndFilteredStores]);
+
   return (
     <div className="flex flex-col h-full bg-cream text-ink select-none relative">
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto px-5 pt-3 pb-6 space-y-6">
+      <div className="flex-1 overflow-y-auto px-5 pt-3 pb-6 space-y-4">
         
         {/* App Header with locked brand mark and logout */}
         <header className="flex items-center justify-between pt-1">
@@ -116,22 +167,95 @@ export default function HomeScreen({ onNavigate }) {
           </p>
         </div>
 
-        {/* Our Stores Section - store selection ONLY */}
-        <div className="space-y-3 pt-1">
+        {/* Store Search Input */}
+        <div className="relative pt-1">
+          <Search className="w-4 h-4 text-ink-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search stores or localities..."
+            className="w-full bg-white border border-surface-tint rounded-card-sm pl-9 pr-8 py-2 text-xs text-ink placeholder:text-ink-muted focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary shadow-xs transition"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              aria-label="Clear search"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink p-0.5 rounded-full"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Area Chips Row (Horizontally Scrollable) */}
+        <div className="flex items-center space-x-1.5 overflow-x-auto no-scrollbar py-0.5 -mx-1 px-1">
+          <button
+            type="button"
+            onClick={() => setSelectedArea('all')}
+            className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
+              selectedArea === 'all'
+                ? 'bg-primary text-white shadow-xs'
+                : 'bg-white text-ink-muted hover:text-ink border border-surface-tint hover:border-primary/40'
+            }`}
+          >
+            All
+          </button>
+          {distinctAreas.map((area) => {
+            const shortLabel = area.replace(/,\s*Dehradun$/i, '').trim();
+            const isSelected = selectedArea === area;
+            return (
+              <button
+                key={area}
+                type="button"
+                onClick={() => setSelectedArea(isSelected ? 'all' : area)}
+                className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
+                  isSelected
+                    ? 'bg-primary text-white shadow-xs'
+                    : 'bg-white text-ink-muted hover:text-ink border border-surface-tint hover:border-primary/40'
+                }`}
+              >
+                {shortLabel}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Small Count Line & Our Stores heading */}
+        <div className="space-y-1 pt-1">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-sm text-ink tracking-tight">Our Stores</h3>
             <span className="text-[11px] text-ink-muted font-medium">Tap to enter store</span>
           </div>
+          <div className="text-xs text-ink-muted font-medium">
+            {sortedAndFilteredStores.length} {sortedAndFilteredStores.length === 1 ? 'store' : 'stores'} • {filteredAreasCount} {filteredAreasCount === 1 ? 'area' : 'areas'} • Dehradun
+          </div>
+        </div>
 
+        {/* Our Stores Section */}
+        <div className="space-y-3">
           {loading ? (
-            <div className="grid grid-cols-3 gap-3">
-              {[1, 2, 3].map(i => (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+              {[1, 2, 3, 4, 5, 6].map(i => (
                 <div key={i} className="h-28 bg-white/60 animate-pulse rounded-card"></div>
               ))}
             </div>
+          ) : sortedAndFilteredStores.length === 0 ? (
+            <div className="py-8 text-center bg-white rounded-card border border-surface-tint p-4 space-y-2">
+              <p className="text-xs font-semibold text-ink">No stores found</p>
+              <p className="text-[11px] text-ink-muted">Try searching a different store name or area</p>
+              <button
+                type="button"
+                onClick={() => { setSearchQuery(''); setSelectedArea('all'); }}
+                className="text-xs font-bold text-primary hover:underline"
+              >
+                Reset filters
+              </button>
+            </div>
           ) : (
-            <div className="grid grid-cols-3 gap-3">
-              {stores.map((store) => {
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+              {sortedAndFilteredStores.map((store) => {
                 const isSelected = selectedStore?.id === store.id;
                 return (
                   <div 
@@ -146,14 +270,15 @@ export default function HomeScreen({ onNavigate }) {
                         Active
                       </span>
                     )}
-                    <div className={`w-14 h-12 rounded-card-sm flex items-center justify-center mb-2 shadow-xs transition-transform group-hover:scale-105 ${
+                    <div className={`w-12 h-10 rounded-card-sm flex items-center justify-center mb-1.5 shadow-xs transition-transform group-hover:scale-105 ${
                       store.code === 'FM' ? 'bg-primary text-white' :
                       store.code === 'SH' ? 'bg-primary-dark text-white' :
-                      'bg-ink text-white'
+                      store.code === 'DN' ? 'bg-ink text-white' :
+                      'bg-emerald-950 text-cream'
                     }`}>
-                      <span className="font-extrabold text-sm tracking-wider">{store.code}</span>
+                      <span className="font-extrabold text-xs tracking-wider">{store.code}</span>
                     </div>
-                    <span className="font-bold text-xs text-ink truncate w-full">{store.name}</span>
+                    <span className="font-bold text-xs text-ink truncate w-full" title={store.name}>{store.name}</span>
                     <span className="text-[10px] text-ink-muted truncate w-full mt-0.5">{store.area}</span>
                   </div>
                 );
